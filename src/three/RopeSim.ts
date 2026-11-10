@@ -59,17 +59,27 @@ export class RopeSim {
 
   step(dt: number) {
     // Ease the rope length toward its target → visible stretch/shrink.
-    this.length += (this.targetLength - this.length) * Math.min(1, dt * 3.2);
+    this.length += (this.targetLength - this.length) * Math.min(1, dt * ROPE.lengthEase);
     const segLen = this.length / ROPE.segments;
     const gravityStep = ROPE.gravity * dt * dt;
 
     // Verlet integration: newPos = pos + (pos - prevPos) + acceleration.
+    // Velocity is damped by ROPE.damping each step, and hard-clamped to
+    // ROPE.maxPointSpeed so no point can ever whip across the screen.
+    const maxDisp = ROPE.maxPointSpeed * dt; // max distance one step may move
     for (let i = 1; i < this.points.length; i++) {
       const p = this.points[i];
       const pr = this.prev[i];
-      const vx = (p.x - pr.x) * 0.985; // slight damping keeps it calm
-      const vy = (p.y - pr.y) * 0.985;
-      const vz = (p.z - pr.z) * 0.985;
+      let vx = (p.x - pr.x) * ROPE.damping;
+      let vy = (p.y - pr.y) * ROPE.damping;
+      let vz = (p.z - pr.z) * ROPE.damping;
+      const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (speed > maxDisp) {
+        const s = maxDisp / speed;
+        vx *= s;
+        vy *= s;
+        vz *= s;
+      }
       pr.copy(p);
       p.x += vx + this.swayForce * dt * dt * 60;
       p.y += vy + gravityStep;

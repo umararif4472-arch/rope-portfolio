@@ -49,8 +49,36 @@ export const ROPE = {
   segments: 14,
   /** Gravity strength pulling the rope down (world units / s²). */
   gravity: -9.8,
-  /** Constraint solver passes per frame. 3 is a good balance. */
-  iterations: 3,
+  /**
+   * PHYSICS SPEED — the master "calm down" knob.
+   * The rope simulation runs at this fraction of real time: 1 = real time,
+   * 0.68 = everything swings about a third slower, like a heavier, longer
+   * pendulum. LOWER = slower & calmer. RAISE toward 1 = snappier/frantic.
+   */
+  timeScale: 0.68,
+  /**
+   * How much speed each rope point KEEPS per step (0..1).
+   * 0.985 (the old value) kept almost all speed, so swings whipped around
+   * for ages. 0.95 bleeds speed off faster, so swinging settles quickly.
+   * LOWER = settles faster/calmer. Too low (< 0.9) feels like underwater.
+   */
+  damping: 0.95,
+  /**
+   * Hard speed limit for any rope point, in world units per second.
+   * Nothing on the rope may move faster than this, so the character can
+   * never dart across the screen. LOWER = stricter calmer.
+   */
+  maxPointSpeed: 6,
+  /**
+   * How fast the rope's visible length eases toward a new length when he
+   * travels between sections (per second). LOWER = slower, gentler stretch.
+   */
+  lengthEase: 2.0,
+  /**
+   * Constraint solver passes per frame. More passes = a steadier rope that
+   * never jitters or over-stretches. 5 is calm and still cheap.
+   */
+  iterations: 5,
   /** Rope thickness (world units). */
   radius: 0.035,
   /** Rope colour. */
@@ -60,10 +88,26 @@ export const ROPE = {
 export const FOLLOW = {
   /**
    * Spring that pulls the character toward the active section.
-   * stiffness: higher = snappier. damping: higher = less bounce.
+   * Tuned for a slow, heavy glide: stiffness 10 with damping 6.5 is almost
+   * exactly "critically damped" (2 × √stiffness ≈ 6.3), which means he
+   * arrives smoothly WITHOUT bouncing past the target and swinging back.
+   * stiffness: LOWER = slower, lazier travel. damping: keep it near
+   * 2 × √stiffness for no bounce; lower damping = more overshoot/bounce.
    */
-  stiffness: 26,
-  damping: 7.5,
+  stiffness: 10,
+  damping: 6.5,
+  /**
+   * Smoothing on the follow TARGET itself (per second): the destination
+   * he is heading to is low-pass filtered, so a sudden section change
+   * eases in instead of yanking him. LOWER = gentler starts.
+   */
+  targetSmoothing: 2.2,
+  /**
+   * Hard speed limit for the follow spring, in world units per second.
+   * However far he has to travel, he never moves faster than this.
+   * LOWER = calmer travel.
+   */
+  maxSpeed: 1.6,
   /**
    * Where the anchor sits: distance from the right edge of the screen,
    * as a fraction of the screen width (0.16 ≈ 16% in from the right).
@@ -73,8 +117,11 @@ export const FOLLOW = {
   /** Character scale per device size. */
   scaleDesktop: 1,
   scaleMobile: 0.62,
-  /** Idle pendulum sway strength (radians). */
-  idleSway: 0.05,
+  /**
+   * Idle pendulum sway strength (radians-ish force). Small = a barely-there
+   * gentle drift while he hangs still. LOWER = stiller.
+   */
+  idleSway: 0.03,
 };
 
 // ---------------------------------------------------------------------------

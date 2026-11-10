@@ -12,7 +12,9 @@
  *
  * Usage:
  *   node scripts/deploy-firebase.mjs --site umar-portfolio
+ *   SITE_ID=umar-portfolio node scripts/deploy-firebase.mjs
  * Env:
+ *   SITE_ID            (default: rope-portfolio; --site flag wins if given)
  *   FIREBASE_PROJECT   (default: neighbormart-7eff0)
  *   SA_KEY_PATH        (default: ~/.config/neighbormart/service-account.json)
  *   DIST_DIR           (default: ./dist)
@@ -27,7 +29,8 @@ import { homedir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 
 const args = process.argv.slice(2);
-const siteId = args[args.indexOf('--site') + 1];
+const flagSite = args.includes('--site') ? args[args.indexOf('--site') + 1] : undefined;
+const siteId = flagSite ?? process.env.SITE_ID ?? 'rope-portfolio';
 if (!siteId) {
   console.error('Usage: node scripts/deploy-firebase.mjs --site <site-id>');
   process.exit(2);

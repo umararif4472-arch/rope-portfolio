@@ -40,7 +40,7 @@ export default function ProceduralCharacter() {
     const t = state.clock.elapsedTime;
     const mood = useStore.getState().mood;
     const calm = prefersReducedMotion;
-    const L = 11; // how fast pivots ease toward their target pose
+    const L = 7.5; // how fast pivots ease toward their target pose (lower = gentler)
 
     // ---- target poses per mood -------------------------------------------
     // Arms hang UP to the rope by default (he is holding on!).
@@ -51,14 +51,14 @@ export default function ProceduralCharacter() {
 
     switch (mood) {
       case 'wave':
-        aRz = -1.05 + (calm ? 0 : Math.sin(t * 9) * 0.35); // right arm up + waving
+        aRz = -1.05 + (calm ? 0 : Math.sin(t * 6) * 0.35); // right arm up + waving (slowed)
         headZ = 0.08;
         break;
       case 'point':
         aRz = 1.4; // right arm stretched out toward the content (his left)
         break;
       case 'nod':
-        headX = calm ? 0.18 : Math.abs(Math.sin(t * 3.2)) * 0.3;
+        headX = calm ? 0.18 : Math.abs(Math.sin(t * 2.4)) * 0.3;
         break;
       case 'thumbsUp':
         aRz = -0.55;
@@ -66,14 +66,14 @@ export default function ProceduralCharacter() {
         break;
       case 'scared':
         aLz = -1.9; aRz = 1.9; // both arms thrown up
-        tremble = calm ? 0 : 0.028;
-        headY = calm ? 0 : Math.sin(t * 26) * 0.14;
-        legSwing = calm ? 0 : Math.sin(t * 18) * 0.2;
+        tremble = calm ? 0 : 0.02; // visible tremble, but smaller/slower than before
+        headY = calm ? 0 : Math.sin(t * 20) * 0.12;
+        legSwing = calm ? 0 : Math.sin(t * 14) * 0.18;
         break;
       case 'swing':
         aLz = -1.5; aRz = 1.5; // arms out, flailing while dragged
-        legSwing = calm ? 0 : Math.sin(t * 6) * 0.3;
-        headZ = calm ? 0 : Math.sin(t * 5) * 0.1;
+        legSwing = calm ? 0 : Math.sin(t * 4) * 0.2;
+        headZ = calm ? 0 : Math.sin(t * 3.8) * 0.1;
         break;
       default: // idle — gentle breathing sway
         aLz = -0.55 + Math.sin(t * 1.4) * 0.04;
@@ -99,7 +99,7 @@ export default function ProceduralCharacter() {
         0,
       );
     } else {
-      body.current.position.set(0, Math.sin(t * 1.8) * 0.015, 0);
+      body.current.position.set(0, Math.sin(t * 1.2) * 0.012, 0);
     }
   });
 

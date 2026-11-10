@@ -36,6 +36,9 @@ export default function RopeCharacter() {
 
   // Spring state (kept in refs — 60fps values don't belong in React state).
   const spring = useRef({ length: 0.6, velocity: 0 });
+  // Smoothed copy of the follow target — the spring chases THIS, so a new
+  // section's destination eases in instead of yanking him (see config).
+  const smoothTarget = useRef(0.6);
   const welcomed = useRef(false);
 
   const sim = useMemo(
@@ -57,7 +60,7 @@ export default function RopeCharacter() {
     sim.setAnchor(anchorFor(isMobileNow()));
     // Welcome drop: one sideways kick so he swings as he lands.
     const id = window.setTimeout(() => {
-      if (!prefersReducedMotion) sim.kick(2.2);
+      if (!prefersReducedMotion) sim.kick(1.1); // gentle nudge, not a shove
       welcomed.current = true;
     }, 350);
     return () => window.clearTimeout(id);
@@ -81,29 +84,47 @@ export default function RopeCharacter() {
     const desiredLength = Math.max(0.6, anchor.y - targetCharY);
 
     if (!store.isFastScrolling) {
-      // Normal spring (semi-implicit Euler).
+      // Smooth the target itself first (exponential low-pass) so section
+      // changes start gently, then run the spring toward it.
+      smoothTarget.current +=
+        (desiredLength - smoothTarget.current) *
+        Math.min(1, dt * FOLLOW.targetSmoothing);
+      // Spring (semi-implicit Euler), with a hard speed cap so however far
+      // he has to travel, he glides — never darts.
       const accel =
-        FOLLOW.stiffness * (desiredLength - spring.current.length) -
+        FOLLOW.stiffness * (smoothTarget.current - spring.current.length) -
         FOLLOW.damping * spring.current.velocity;
       spring.current.velocity += accel * dt;
+      spring.current.velocity = THREE.MathUtils.clamp(
+        spring.current.velocity,
+        -FOLLOW.maxSpeed,
+        FOLLOW.maxSpeed,
+      );
       spring.current.length += spring.current.velocity * dt;
+    } else {
+      // Keep the smoothed target in sync while frozen, so the catch-up
+      // doesn't start with a sudden jump.
+      smoothTarget.current = spring.current.length;
     }
     // else: frozen target = he lags behind while you scroll too fast.
     sim.targetLength = spring.current.length;
 
-    // -- sway: gentle idle breeze, wild when dragged fast or swinging --------
+    // -- sway: gentle idle breeze, panicked-but-capped when dragged fast -----
+    // Amplitudes/frequencies are deliberately modest: the scared swing must
+    // READ as panic, not as the rope breaking. (Plus the sim itself clamps
+    // every point's speed via ROPE.maxPointSpeed.)
     if (prefersReducedMotion) {
       sim.swayForce = 0;
     } else if (store.isFastScrolling || store.mood === 'swing') {
-      sim.swayForce = Math.sin(t * 7.3) * 26;
+      sim.swayForce = Math.sin(t * 4.6) * 13;
     } else if (store.mood === 'scared') {
-      sim.swayForce = Math.sin(t * 22) * 7;
+      sim.swayForce = Math.sin(t * 16) * 5;
     } else {
-      sim.swayForce = Math.sin(t * 0.9) * FOLLOW.idleSway * 22;
+      sim.swayForce = Math.sin(t * 0.55) * FOLLOW.idleSway * 22;
     }
 
-    // -- 3. step the rope ------------------------------------------------------
-    sim.step(dt);
+    // -- 3. step the rope (at the calmer physics time scale from config) -----
+    sim.step(dt * ROPE.timeScale);
 
     // -- rebuild the rope tube from the sim points -----------------------------
     const curve = new THREE.CatmullRomCurve3(sim.points);

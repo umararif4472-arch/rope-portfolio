@@ -86,12 +86,12 @@ function GlbCharacter() {
     const t = state.clock.elapsedTime;
     const { head, armR, armL } = bones.current;
     const calm = prefersReducedMotion;
-    if (mood === 'wave' && armR) armR.rotation.z = -0.6 + (calm ? 0 : Math.sin(t * 9) * 0.4);
-    if (mood === 'nod' && head) head.rotation.x = calm ? 0.15 : Math.abs(Math.sin(t * 3.2)) * 0.3;
+    if (mood === 'wave' && armR) armR.rotation.z = -0.6 + (calm ? 0 : Math.sin(t * 6) * 0.35);
+    if (mood === 'nod' && head) head.rotation.x = calm ? 0.15 : Math.abs(Math.sin(t * 2.4)) * 0.3;
     if (mood === 'point' && armR) armR.rotation.x = -1.35;
     if (mood === 'thumbsUp' && armR) armR.rotation.z = -0.4;
     if (mood === 'scared') {
-      const j = calm ? 0 : 0.02;
+      const j = calm ? 0 : 0.015;
       group.current.position.set((Math.random() - 0.5) * j, (Math.random() - 0.5) * j, 0);
       if (armR) armR.rotation.z = -1.8;
       if (armL) armL.rotation.z = 1.8;
