@@ -64,6 +64,71 @@ body {
   }
 }
 
+/*
+ * MODEL3D GUIDE — the real 3D model, just as stuck as the medallion.
+ * Same fixed spot (right side, below the navbar via --guide-nav-h +
+ * the 14px gap), bigger box so the whole hanging body reads clearly.
+ * Sizes mirror CHARACTER.model*Px in src/config/character.ts.
+ * The canvas inside renders on demand only — nothing here animates.
+ */
+.guide-model3d {
+  position: fixed;
+  top: calc(var(--guide-nav-h, 78px) + 14px);
+  right: 16px;
+  width: 212px;
+  height: 312px;
+  z-index: 40;
+  pointer-events: none;
+}
+.guide-model3d canvas {
+  display: block;
+}
+/* The static rope segment above the container: viewport top → frame
+   top, centred on the container so it lines up with the in-scene
+   rope that continues down to his hands. */
+.guide-model3d .guide-model-rope {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 4px;
+  height: 100vh;
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+/* Loading placeholder: his avatar image in a circle, centred where
+   his head will be, until the GLB has loaded and posed. */
+.guide-model3d .guide-model-placeholder {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  width: 96px;
+  height: 96px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 4px solid #d99a2b;
+  background: #0d2420;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.55);
+}
+.guide-model3d .guide-model-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 6%;
+}
+@media (max-width: 767px) {
+  .guide-model3d {
+    top: calc(var(--guide-nav-h, 70px) + 14px);
+    right: 12px;
+    width: 168px;
+    height: 250px;
+  }
+  .guide-model3d .guide-model-placeholder {
+    width: 76px;
+    height: 76px;
+  }
+}
+
 /* Lenis recommended base styles */
 html.lenis,
 html.lenis body {

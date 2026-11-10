@@ -29,6 +29,7 @@ import Navbar from './components/Navbar';
 import LoadingScreen from './components/LoadingScreen';
 import SpeechBubble from './components/SpeechBubble';
 import GuideMedallion from './components/GuideMedallion';
+import GuideModel3D from './components/GuideModel3D';
 import FallbackGuide from './components/FallbackGuide';
 import Scene from './three/Scene';
 import Hero from './sections/Hero';
@@ -48,6 +49,13 @@ gsap.registerPlugin(ScrollTrigger);
 const IMAGE_FIXED =
   CHARACTER.useImageGuide && CHARACTER.guideMode === 'fixed';
 
+/**
+ * Model3D guide mode: the REAL 3D model (Avaturn GLB) hangs from a
+ * frozen rope at the same fixed spot. Static render only — see
+ * GuideModel3D.tsx. If the GLB fails, we fall back to the medallion.
+ */
+const MODEL3D = CHARACTER.guideMode === 'model3d';
+
 function webglAvailable(): boolean {
   try {
     const canvas = document.createElement('canvas');
@@ -63,6 +71,7 @@ function webglAvailable(): boolean {
 export default function App() {
   const [webgl] = useState(webglAvailable);
   const [loadingDone, setLoadingDone] = useState(false);
+  const [modelFailed, setModelFailed] = useState(false);
   const { progress, active } = useProgress();
   const lastSaidSection = useRef<string | null>(null);
 
@@ -142,9 +151,11 @@ export default function App() {
   // ---- loading → welcome sequence ----------------------------------------------
   useEffect(() => {
     if (loadingDone) return;
-    if (IMAGE_FIXED) {
-      // No 3D scene is mounted in fixed mode, so there is nothing to
-      // wait for — the guide is a plain <img> in a fixed CSS position.
+    if (IMAGE_FIXED || MODEL3D) {
+      // Fixed image mode mounts no 3D scene at all. Model3d mode loads
+      // its 13 MB GLB lazily in the background (placeholder + medallion
+      // fallback cover the wait) — the page must never sit on a
+      // loading screen for the guide's sake.
       setLoadingDone(true);
       return;
     }
@@ -196,11 +207,20 @@ export default function App() {
         <Contact />
       </main>
 
-      {IMAGE_FIXED ? (
+      {MODEL3D && webgl && !modelFailed ? (
+        <>
+          {/* The real 3D model, posed once (arms up, gripping the rope)
+              and rendered statically in a fixed container. No <Scene/>,
+              no physics, no animation loop — only the bubble changes. */}
+          <GuideModel3D onFail={() => setModelFailed(true)} />
+          <SpeechBubble />
+        </>
+      ) : IMAGE_FIXED || MODEL3D ? (
         <>
           {/* Fix pass 5: NO <Scene/> here — the Three.js canvas is not
               rendered at all in fixed mode. The guide is the stuck CSS
-              medallion + static rope segment; only the bubble changes. */}
+              medallion + static rope segment; only the bubble changes.
+              (Also the model3d fallback: GLB failed or no WebGL.) */}
           <GuideMedallion />
           <SpeechBubble />
         </>

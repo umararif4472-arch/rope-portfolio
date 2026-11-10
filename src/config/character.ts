@@ -70,12 +70,25 @@ export type Mood = keyof typeof CLIPS;
 export const CHARACTER = {
   useImageGuide: true,
   /**
-   * How the image guide behaves. Only one mode exists now:
-   *  - 'fixed'  → the model NEVER moves; it is stuck at one fixed
-   *               screen position (right side, just below the navbar)
-   *               and only the speech bubble changes. (Fix pass 5.)
+   * How the guide behaves:
+   *  - 'model3d' → the REAL 3D model (public/model.glb, Umar's Avaturn
+   *               avatar) hangs from a frozen rope at the same fixed
+   *               spot. Posed ONCE (arms up, gripping the rope) and
+   *               rendered statically — frameloop="demand", no
+   *               animation loop, no physics. Only the speech bubble
+   *               changes. If the GLB fails, the medallion takes over.
+   *  - 'fixed'  → fix pass 5: the image medallion, stuck the same way.
    */
-  guideMode: 'fixed',
+  guideMode: 'model3d',
+  // -------------------------------------------------------------------------
+  //  MODEL3D MODE — size of the fixed 3D guide container (mirrored by the
+  //  `.guide-model3d` rules in src/index.css). Big enough that the full
+  //  hanging body reads clearly; small enough to stay a "guide".
+  // -------------------------------------------------------------------------
+  modelWidthDesktopPx: 212,
+  modelHeightDesktopPx: 312,
+  modelWidthMobilePx: 168,
+  modelHeightMobilePx: 250,
   // -------------------------------------------------------------------------
   //  FIXED POSITION (fix pass 5) — where the stuck model sits, forever
   // -------------------------------------------------------------------------
