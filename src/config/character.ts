@@ -78,11 +78,14 @@ export const CHARACTER = {
   /**
    * How the guide behaves:
    *  - 'model3d' → the REAL 3D model (MODEL_PATH, Umar's Avaturn
-   *               avatar) hangs from a frozen rope at the same fixed
-   *               spot. Posed ONCE (arms up, gripping the rope) and
-   *               rendered statically — frameloop="demand", no
-   *               animation loop, no physics. Only the speech bubble
-   *               changes. If the GLB fails, the medallion takes over.
+   *               avatar) hangs from a rope at the same anchored spot.
+   *               Posed once (arms up, gripping the rope), then given
+   *               SUBTLE life only — a tiny pendulum sway, breathing,
+   *               head looks, leg lag (see `motion` below) — plus the
+   *               up-and-down section-arrival routine (see `arrival`).
+   *               He NEVER travels or swings free (no physics); with
+   *               reduced-motion he is a frozen statue. If the GLB
+   *               fails, the medallion takes over.
    *  - 'fixed'  → fix pass 5: the image medallion, stuck the same way.
    */
   guideMode: 'model3d',
@@ -95,6 +98,98 @@ export const CHARACTER = {
   modelHeightDesktopPx: 312,
   modelWidthMobilePx: 168,
   modelHeightMobilePx: 250,
+  // -------------------------------------------------------------------------
+  //  SUBTLE LIFE (motion pass, 2026-11-10) — Umar reversed the freeze:
+  //  he now wants the model to "do some movement and feel real", with
+  //  the model and rope moving "a little bit only, not like old ones".
+  //  So: a LIVING STATUE. He never changes spot, never travels, never
+  //  swings free — these are the ONLY motions, and every size below is
+  //  deliberately tiny. To calm him down (or freeze him again) lower
+  //  the degrees toward 0; to make him livelier, raise them a little.
+  //  With "prefers-reduced-motion" ALL of this is off — statue mode.
+  // -------------------------------------------------------------------------
+  motion: {
+    /**
+     * PENDULUM SWAY — model + rope tilt together, rigidly, around the
+     * rope's anchor at the very top of the screen (like a real hanging
+     * sign in a faint breeze). Biggest tilt in degrees; his head only
+     * moves a few pixels. Period = seconds for one full swing cycle.
+     */
+    swayDeg: 1.6,
+    swayPeriodS: 5,
+    /**
+     * A second, smaller wobble layered on the sway so the rhythm never
+     * looks like a metronome. Degrees + seconds.
+     */
+    swayHarmonicDeg: 0.5,
+    swayHarmonicPeriodS: 3.1,
+    /**
+     * BREATHING — his chest rises and falls this many degrees, on this
+     * cycle. 0.8° is a whisper: you sense it more than see it.
+     */
+    breathDeg: 0.8,
+    breathPeriodS: 3.8,
+    /**
+     * HEAD NOD — a constant tiny nod (thinking/alive), degrees + the
+     * seconds one nod cycle takes.
+     */
+    nodDeg: 1.5,
+    nodPeriodS: 6.5,
+    /**
+     * LOOK-AROUND — every lookEveryMinS..lookEveryMaxS seconds he
+     * turns his head to one side by lookYawDeg, over lookTurnS
+     * seconds, holds it for lookHoldS, then turns back. Sides
+     * alternate. Never a snap — always a smooth ease.
+     */
+    lookYawDeg: 7,
+    lookEveryMinS: 8,
+    lookEveryMaxS: 11,
+    lookTurnS: 1.4,
+    lookHoldS: 1,
+    /**
+     * LEG LAG — his legs trail the sway a touch, like real legs on a
+     * swing: this many degrees, arriving legLagS seconds late.
+     */
+    legLagDeg: 0.7,
+    legLagS: 0.4,
+  },
+  // -------------------------------------------------------------------------
+  //  SECTION ARRIVALS (2026-11-10) — when the visitor scrolls to a new
+  //  section, he plays a little routine: he climbs UP out of the top
+  //  of the screen along his rope, waits a beat, then drops back DOWN
+  //  into this exact spot and greets the section ("Oh, so you're
+  //  here!") before explaining it. Same drop-in once on page load
+  //  (with the normal welcome line instead of the greeting). Straight
+  //  up/down on the rope line ONLY — sideways movement stays banned.
+  //  Fast scrolling past several sections only triggers the routine
+  //  for the section you finally settle on.
+  // -------------------------------------------------------------------------
+  arrival: {
+    /** How long the climb up out of the screen takes (ms). */
+    riseMs: 350,
+    /** How long he stays up/out of sight before coming back (ms). */
+    waitMs: 1000,
+    /** How long the drop back into his spot takes (ms). */
+    descendMs: 700,
+    /** How long the greeting bubble shows before the section text (ms). */
+    greetingMs: 1600,
+    /** The greeting he says when he lands on a new section. */
+    greetingText: "Oh, so you're here!",
+    /**
+     * The tiny "settle" when he lands: he drops this many px PAST his
+     * spot, then eases back up into place. 4px max — a soft landing,
+     * never a bounce.
+     */
+    settlePx: 4,
+    /**
+     * A section must be on screen this long (ms) before the routine
+     * triggers — this is what makes fast fly-by scrolling skip the
+     * in-between sections.
+     */
+    debounceMs: 300,
+    /** On page load: he waits this long (ms) up top, then drops in. */
+    loadDelayMs: 500,
+  },
   // -------------------------------------------------------------------------
   //  FIXED POSITION (fix pass 5) — where the stuck model sits, forever
   // -------------------------------------------------------------------------

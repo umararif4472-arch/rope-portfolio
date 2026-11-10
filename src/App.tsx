@@ -108,6 +108,15 @@ export default function App() {
         store.setSection(cfg.id);
         if (!store.welcomed) return; // welcome sequence owns him at first
         store.setMood(cfg.animation);
+        if (MODEL3D && store.arrivalGuideMounted) {
+          // The 3D guide runs its arrival routine for this section and
+          // speaks when he lands (greeting first, then this section's
+          // text) — saying it here too would double-speak and mistime
+          // it. If the GLB failed, the guide is unmounted, the flag is
+          // false, and we fall through to the direct line below.
+          lastSaidSection.current = cfg.id;
+          return;
+        }
         if (lastSaidSection.current !== cfg.id) {
           lastSaidSection.current = cfg.id;
           store.say(
@@ -210,8 +219,9 @@ export default function App() {
       {MODEL3D && webgl && !modelFailed ? (
         <>
           {/* The real 3D model, posed once (arms up, gripping the rope)
-              and rendered statically in a fixed container. No <Scene/>,
-              no physics, no animation loop — only the bubble changes. */}
+              in an anchored container. No <Scene/>, no physics — only
+              subtle life (sway/breathing/looks) and the up/down
+              arrival routine, both driven inside GuideModel3D. */}
           <GuideModel3D onFail={() => setModelFailed(true)} />
           <SpeechBubble />
         </>

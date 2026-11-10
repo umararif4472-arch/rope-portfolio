@@ -65,27 +65,45 @@ body {
 }
 
 /*
- * MODEL3D GUIDE — the real 3D model, just as stuck as the medallion.
- * Same fixed spot (right side, below the navbar via --guide-nav-h +
- * the 14px gap), bigger box so the whole hanging body reads clearly.
- * Sizes mirror CHARACTER.model*Px in src/config/character.ts.
- * The canvas inside renders on demand only — nothing here animates.
+ * MODEL3D GUIDE — the real 3D model at his anchored spot (right side,
+ * below the navbar via --guide-nav-h + the 14px gap). Sizes mirror
+ * CHARACTER.model*Px in src/config/character.ts.
+ *
+ * .guide-sway is the motion layer: a fixed strip from the TOP of the
+ * viewport down to his feet. JS writes ONE transform on it per frame —
+ * rotate() for the tiny pendulum sway (transform-origin 50% 0 = the
+ * rope's anchor at the top edge, exactly where his rope is nailed) and
+ * translateY() for the arrival climb/drop. The layout boxes of BOTH
+ * layers never move; only the transform does. With reduced motion no
+ * transform is ever written and he is the original frozen statue.
  */
-.guide-model3d {
+.guide-sway {
   position: fixed;
-  top: calc(var(--guide-nav-h, 78px) + 14px);
+  top: 0;
   right: 16px;
   width: 212px;
-  height: 312px;
+  height: calc(var(--guide-nav-h, 78px) + 14px + 312px);
   z-index: 40;
+  pointer-events: none;
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+.guide-model3d {
+  position: absolute;
+  left: 0;
+  top: calc(var(--guide-nav-h, 78px) + 14px);
+  width: 212px;
+  height: 312px;
   pointer-events: none;
 }
 .guide-model3d canvas {
   display: block;
 }
-/* The static rope segment above the container: viewport top → frame
-   top, centred on the container so it lines up with the in-scene
-   rope that continues down to his hands. */
+/* The rope segment above the container: viewport top → frame top,
+   centred on the container so it lines up with the in-scene rope
+   that continues down to his hands. Because it lives inside the
+   sway/climb layer, its visible length pays in and out with him as
+   he rises and drops — exactly like a real rope over its anchor. */
 .guide-model3d .guide-model-rope {
   position: absolute;
   left: 50%;
@@ -117,9 +135,13 @@ body {
   object-position: 50% 6%;
 }
 @media (max-width: 767px) {
+  .guide-sway {
+    right: 12px;
+    width: 168px;
+    height: calc(var(--guide-nav-h, 70px) + 14px + 250px);
+  }
   .guide-model3d {
     top: calc(var(--guide-nav-h, 70px) + 14px);
-    right: 12px;
     width: 168px;
     height: 250px;
   }

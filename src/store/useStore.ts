@@ -15,6 +15,28 @@ import type { SectionConfig } from '../config/character';
 
 let bubbleTimer: number | undefined;
 
+/**
+ * Pending lines for `saySequence`: each shows for its own duration,
+ * then the next takes the same bubble. A plain `say()` (or
+ * `hideBubble()`) empties the queue — direct lines always win.
+ */
+let bubbleQueue: Array<{ text: string; durationMs: number }> = [];
+
+function showNextBubble(
+  set: (partial: Partial<GuideState>) => void,
+) {
+  const next = bubbleQueue.shift();
+  if (!next) {
+    set({ bubbleVisible: false });
+    return;
+  }
+  set({ bubbleText: next.text, bubbleVisible: true });
+  bubbleTimer = window.setTimeout(() => {
+    if (bubbleQueue.length > 0) showNextBubble(set);
+    else set({ bubbleVisible: false });
+  }, next.durationMs);
+}
+
 interface GuideState {
   /** Id of the section currently in view ('hero', 'about', ...). */
   currentSection: SectionConfig['id'];
@@ -30,15 +52,30 @@ interface GuideState {
   welcomed: boolean;
   /** Latest raw scroll velocity reported by Lenis (used by the 3D loop). */
   scrollVelocity: number;
+  /**
+   * True while the model3d guide is mounted and running its arrival
+   * routine. In that mode the guide owns section speech (greeting →
+   * section text, timed to his landing), so App.tsx must NOT also say
+   * the section text directly. If the GLB fails and the guide unmounts
+   * (medallion fallback), this flips back to false and App speaks.
+   */
+  arrivalGuideMounted: boolean;
 
   setSection: (id: SectionConfig['id']) => void;
   setMood: (mood: Mood) => void;
   /**
    * Show a bubble with new text and auto-hide it after `durationMs`
    * (section default from config). Re-calling restarts text + timer.
+   * Clears any queued `saySequence` lines — a direct line always wins.
    */
   say: (text: string, durationMs?: number) => void;
+  /**
+   * Show several lines one after another in the same bubble, each for
+   * its own duration (used for greeting → section explanation).
+   */
+  saySequence: (items: Array<{ text: string; durationMs: number }>) => void;
   hideBubble: () => void;
+  setArrivalGuideMounted: (mounted: boolean) => void;
   setFastScrolling: (fast: boolean) => void;
   setWelcomed: () => void;
   setScrollVelocity: (v: number) => void;
@@ -52,21 +89,30 @@ export const useStore = create<GuideState>((set) => ({
   isFastScrolling: false,
   welcomed: false,
   scrollVelocity: 0,
+  arrivalGuideMounted: false,
 
   setSection: (id) => set({ currentSection: id }),
   setMood: (mood) => set({ mood }),
   say: (text, durationMs = BUBBLE.sectionDurationMs) => {
     window.clearTimeout(bubbleTimer);
+    bubbleQueue = [];
     set({ bubbleText: text, bubbleVisible: true });
     bubbleTimer = window.setTimeout(
       () => set({ bubbleVisible: false }),
       durationMs,
     );
   },
+  saySequence: (items) => {
+    window.clearTimeout(bubbleTimer);
+    bubbleQueue = [...items];
+    showNextBubble(set);
+  },
   hideBubble: () => {
     window.clearTimeout(bubbleTimer);
+    bubbleQueue = [];
     set({ bubbleVisible: false });
   },
+  setArrivalGuideMounted: (mounted) => set({ arrivalGuideMounted: mounted }),
   setFastScrolling: (fast) => set({ isFastScrolling: fast }),
   setWelcomed: () => set({ welcomed: true }),
   setScrollVelocity: (v) => set({ scrollVelocity: v }),
