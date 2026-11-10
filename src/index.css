@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 theme tokens — the site's whole palette lives here.
+ * ONE accent (amber) on deep teal / near-black, per the design brief.
+ */
+@theme {
+  --color-accent: #d99a2b;
+  --color-ink: #071512;
+  --color-pine: #0b2420;
+  --font-sans: "Inter", ui-sans-system, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  background-color: #071512;
+  scrollbar-color: #d99a2b #071512;
+}
+
+body {
+  background-color: #071512;
+  overflow-x: hidden;
+}
+
+/* Lenis recommended base styles */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+/* Respect reduced motion globally for CSS animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

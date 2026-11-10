@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#071512"/>
+  <!-- rope -->
+  <line x1="32" y1="4" x2="32" y2="22" stroke="#D99A2B" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="1 6"/>
+  <!-- hook -->
+  <circle cx="32" cy="25" r="3.4" fill="none" stroke="#D99A2B" stroke-width="3"/>
+  <!-- U monogram -->
+  <path d="M20 32 v12 a12 12 0 0 0 24 0 V32" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+</svg>
