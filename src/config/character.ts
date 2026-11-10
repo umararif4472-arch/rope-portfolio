@@ -79,6 +79,31 @@ export const ROPE = {
    * never jitters or over-stretches. 5 is calm and still cheap.
    */
   iterations: 5,
+  /**
+   * SIDEWAYS LOCK — how hard the rope is pulled back to hanging straight
+   * down below its anchor, every physics step (0..1). The character must
+   * NEVER wander left/right: scrolling only changes the rope's LENGTH,
+   * never his sideways position. 0.6 corrects 60% of any sideways drift
+   * per step, so drift dies almost instantly and only the deliberate
+   * micro-sway (see FOLLOW.idleSway / ROPE.scaredSway) survives.
+   * RAISE toward 1 = even more rigid. LOWER = looser, more pendulum.
+   */
+  xLock: 0.6,
+  /**
+   * Damping used WHILE he is travelling to a new depth (see RopeSim).
+   * Lower than the idle ROPE.damping on purpose: while gliding up/down the
+   * rope should behave like it is moving through honey — zero swinging
+   * until he arrives, then the gentle idle damping takes over again.
+   */
+  motionDamping: 0.88,
+  /**
+   * Biggest sideways sway allowed during the scared reaction, in world
+   * units at the character. Even panicking, he only shivers this far
+   * sideways (≈ a few pixels) and stays on his anchor line.
+   */
+  scaredSway: 0.05,
+  /** Absolute sideways cap for ANY sway (welcome wiggle included). */
+  maxSway: 0.06,
   /** Rope thickness (world units). */
   radius: 0.035,
   /** Rope colour. */
@@ -105,23 +130,30 @@ export const FOLLOW = {
   /**
    * Hard speed limit for the follow spring, in world units per second.
    * However far he has to travel, he never moves faster than this.
-   * LOWER = calmer travel.
+   * Softened again in fix pass 2 (was 1.6) — Umar asked twice for calm.
    */
-  maxSpeed: 1.6,
+  maxSpeed: 1.15,
   /**
-   * Where the anchor sits: distance from the right edge of the screen,
-   * as a fraction of the screen width (0.16 ≈ 16% in from the right).
+   * WHERE THE ROPE IS NAILED TO THE TOP OF THE SCREEN.
+   * Distance from the RIGHT edge, as a fraction of the screen width:
+   * desktop 0.16 → he hangs at 84% of the width (a little bit right of
+   * centre-right, clear of the text); mobile 0.18 → 82% of the width.
+   * This anchor NEVER moves sideways — not between sections, not ever.
+   * Scrolling only makes the rope longer/shorter.
    */
-  anchorRightFractionDesktop: 0.14,
-  anchorRightFractionMobile: 0.2,
+  anchorRightFractionDesktop: 0.16,
+  anchorRightFractionMobile: 0.18,
   /** Character scale per device size. */
   scaleDesktop: 1,
   scaleMobile: 0.62,
   /**
-   * Idle pendulum sway strength (radians-ish force). Small = a barely-there
-   * gentle drift while he hangs still. LOWER = stiller.
+   * Idle MICRO-sway: the largest sideways drift (world units at the
+   * character, ≈ a few pixels) while he hangs still at a section. Just
+   * enough to feel alive, small enough to never look like wandering.
+   * While he is travelling to a new depth the sway is switched OFF
+   * completely, so travel is a clean straight glide. LOWER = stiller.
    */
-  idleSway: 0.03,
+  idleSway: 0.02,
 };
 
 // ---------------------------------------------------------------------------

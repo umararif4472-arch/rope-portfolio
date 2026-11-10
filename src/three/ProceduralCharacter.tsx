@@ -17,13 +17,17 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore, prefersReducedMotion } from '../store/useStore';
 
-// Umar's brand palette (deep teal + amber), matched to his 3D avatar.
-const TEAL = '#0e4f4a';
-const TEAL_DARK = '#08312e';
-const AMBER = '#D99A2B';
-const SKIN = '#e8b08a';
-const HAIR = '#241610';
-const DARK = '#101418';
+// Colours matched to Umar's real 3D avatar (public/guide-fallback.webp):
+// warm brown skin, black swept hair + full black beard, black sunglasses,
+// NAVY polo with a GOLD collar, BLACK long arm sleeves, dark trousers.
+const NAVY = '#1E3A5F'; // polo shirt
+const NAVY_DARK = '#16293F';
+const GOLD = '#D99A2B'; // polo collar + placket
+const SKIN = '#9C6642'; // warm medium-brown skin
+const HAIR = '#0B0908'; // near-black hair + beard
+const SLEEVE = '#0D0F12'; // black arm sleeves / shoes
+const TROUSER = '#1B2432'; // dark charcoal-navy trousers
+const LENS = '#05070A'; // sunglasses lenses
 
 const damp = THREE.MathUtils.damp;
 
@@ -105,95 +109,168 @@ export default function ProceduralCharacter() {
 
   return (
     <group ref={body}>
-      {/* ------------------------------ arms (shoulder pivots) ------------- */}
-      <group ref={armL} position={[-0.33, -0.6, 0]}>
-        <mesh position={[0, 0.27, 0]}>
-          <capsuleGeometry args={[0.095, 0.4, 6, 12]} />
-          <meshStandardMaterial color={TEAL} roughness={0.6} />
+      {/* ------------------------------ arms (shoulder pivots) -------------
+          Each arm, top→bottom: short NAVY polo sleeve, then a BLACK long
+          arm-sleeve to the wrist, then a skin-tone hand gripping the rope. */}
+      <group ref={armL} position={[-0.34, -0.6, 0]}>
+        <mesh position={[0, 0.16, 0]}>
+          <capsuleGeometry args={[0.105, 0.16, 6, 12]} />
+          <meshStandardMaterial color={NAVY} roughness={0.6} />
         </mesh>
-        <mesh position={[0, 0.52, 0]}>
-          <sphereGeometry args={[0.105, 16, 16]} />
+        <mesh position={[0, 0.4, 0]}>
+          <capsuleGeometry args={[0.085, 0.26, 6, 12]} />
+          <meshStandardMaterial color={SLEEVE} roughness={0.75} />
+        </mesh>
+        <mesh position={[0, 0.6, 0]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
           <meshStandardMaterial color={SKIN} roughness={0.7} />
         </mesh>
       </group>
-      <group ref={armR} position={[0.33, -0.6, 0]}>
-        <mesh position={[0, 0.27, 0]}>
-          <capsuleGeometry args={[0.095, 0.4, 6, 12]} />
-          <meshStandardMaterial color={TEAL} roughness={0.6} />
+      <group ref={armR} position={[0.34, -0.6, 0]}>
+        <mesh position={[0, 0.16, 0]}>
+          <capsuleGeometry args={[0.105, 0.16, 6, 12]} />
+          <meshStandardMaterial color={NAVY} roughness={0.6} />
         </mesh>
+        <mesh position={[0, 0.4, 0]}>
+          <capsuleGeometry args={[0.085, 0.26, 6, 12]} />
+          <meshStandardMaterial color={SLEEVE} roughness={0.75} />
+        </mesh>
+        {/* smartwatch on his LEFT wrist (the +X side, facing the visitor) */}
         <mesh position={[0, 0.52, 0]}>
-          <sphereGeometry args={[0.105, 16, 16]} />
+          <boxGeometry args={[0.2, 0.055, 0.2]} />
+          <meshStandardMaterial color={SLEEVE} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.52, 0.095]}>
+          <boxGeometry args={[0.095, 0.05, 0.02]} />
+          <meshStandardMaterial
+            color="#9FD8E8"
+            emissive="#2E5E6E"
+            emissiveIntensity={0.7}
+            roughness={0.3}
+          />
+        </mesh>
+        <mesh position={[0, 0.6, 0]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
           <meshStandardMaterial color={SKIN} roughness={0.7} />
         </mesh>
         {/* the all-important thumb */}
-        <mesh position={[0.07, 0.62, 0.03]}>
+        <mesh position={[0.07, 0.7, 0.03]}>
           <capsuleGeometry args={[0.032, 0.07, 4, 8]} />
           <meshStandardMaterial color={SKIN} roughness={0.7} />
         </mesh>
       </group>
 
-      {/* ------------------------------ head (neck pivot) ------------------ */}
-      <group ref={head} position={[0, -0.66, 0]}>
-        <mesh position={[0, 0.2, 0]}>
-          <sphereGeometry args={[0.27, 24, 24]} />
+      {/* ------------------------------ head (neck pivot) ------------------
+          Slightly large head so the features read at small size: swept
+          black hair with volume, a full black beard band on the jaw,
+          glossy sunglasses, warm brown skin. */}
+      <group ref={head} position={[0, -0.66, 0]} scale={1.07}>
+        {/* neck */}
+        <mesh position={[0, 0.0, 0]}>
+          <cylinderGeometry args={[0.09, 0.1, 0.16, 12]} />
+          <meshStandardMaterial color={SKIN} roughness={0.7} />
+        </mesh>
+        {/* skull / face */}
+        <mesh position={[0, 0.22, 0]}>
+          <sphereGeometry args={[0.29, 24, 24]} />
           <meshStandardMaterial color={SKIN} roughness={0.65} />
         </mesh>
-        {/* hair — a slightly bigger half-dome tipped back */}
-        <mesh position={[0, 0.27, -0.045]} rotation={[0.35, 0, 0]}>
-          <sphereGeometry args={[0.278, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55]} />
-          <meshStandardMaterial color={HAIR} roughness={0.85} />
+        {/* ears */}
+        <mesh position={[-0.285, 0.2, 0]}>
+          <sphereGeometry args={[0.055, 12, 12]} />
+          <meshStandardMaterial color={SKIN} roughness={0.7} />
         </mesh>
-        {/* beard */}
-        <mesh position={[0, 0.05, 0.13]} rotation={[0.5, 0, 0]}>
-          <sphereGeometry args={[0.19, 20, 12, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.5]} />
+        <mesh position={[0.285, 0.2, 0]}>
+          <sphereGeometry args={[0.055, 12, 12]} />
+          <meshStandardMaterial color={SKIN} roughness={0.7} />
+        </mesh>
+        {/* hair — a cap of volume on top, tipped slightly back */}
+        <mesh position={[0, 0.245, -0.02]} rotation={[-0.15, 0, 0]} scale={[1, 0.85, 1]}>
+          <sphereGeometry args={[0.298, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.52]} />
           <meshStandardMaterial color={HAIR} roughness={0.9} />
         </mesh>
-        {/* sunglasses — his signature look */}
-        <mesh position={[0, 0.24, 0.235]}>
-          <boxGeometry args={[0.42, 0.11, 0.05]} />
-          <meshStandardMaterial color={DARK} roughness={0.25} metalness={0.4} />
+        {/* the swept-up fringe / quiff at the front */}
+        <mesh position={[0, 0.4, 0.13]} scale={[1.15, 0.55, 0.8]}>
+          <sphereGeometry args={[0.16, 18, 14]} />
+          <meshStandardMaterial color={HAIR} roughness={0.9} />
         </mesh>
-        {/* smile */}
-        <mesh position={[0, 0.08, 0.252]} rotation={[0, 0, Math.PI]}>
-          <torusGeometry args={[0.07, 0.012, 8, 16, Math.PI]} />
-          <meshStandardMaterial color={DARK} roughness={0.6} />
+        {/* beard — a shell band wrapping jaw, chin and lower cheeks */}
+        <mesh position={[0, 0.215, 0.01]} scale={[0.98, 1, 0.98]}>
+          <sphereGeometry
+            args={[0.295, 24, 16, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45]}
+          />
+          <meshStandardMaterial color={HAIR} roughness={0.95} />
         </mesh>
+        {/* subtle mouth line just above the beard */}
+        <mesh position={[0, 0.1, 0.288]} rotation={[0, 0, Math.PI]}>
+          <torusGeometry args={[0.045, 0.01, 8, 16, Math.PI]} />
+          <meshStandardMaterial color="#5A4030" roughness={0.7} />
+        </mesh>
+        {/* sunglasses — glossy black bar + two lens panels + temple arms */}
+        <group position={[0, 0.28, 0.245]}>
+          <mesh position={[0, 0.045, 0]}>
+            <boxGeometry args={[0.47, 0.055, 0.045]} />
+            <meshStandardMaterial color={LENS} roughness={0.15} metalness={0.55} />
+          </mesh>
+          <mesh position={[-0.115, -0.03, 0.005]}>
+            <boxGeometry args={[0.175, 0.125, 0.05]} />
+            <meshStandardMaterial color={LENS} roughness={0.12} metalness={0.6} />
+          </mesh>
+          <mesh position={[0.115, -0.03, 0.005]}>
+            <boxGeometry args={[0.175, 0.125, 0.05]} />
+            <meshStandardMaterial color={LENS} roughness={0.12} metalness={0.6} />
+          </mesh>
+          <mesh position={[-0.245, 0.03, -0.09]}>
+            <boxGeometry args={[0.03, 0.04, 0.24]} />
+            <meshStandardMaterial color={LENS} roughness={0.2} metalness={0.5} />
+          </mesh>
+          <mesh position={[0.245, 0.03, -0.09]}>
+            <boxGeometry args={[0.03, 0.04, 0.24]} />
+            <meshStandardMaterial color={LENS} roughness={0.2} metalness={0.5} />
+          </mesh>
+        </group>
       </group>
 
-      {/* ------------------------------ torso ------------------------------ */}
+      {/* ------------------------------ torso: navy polo ------------------- */}
       <mesh position={[0, -1.08, 0]}>
-        <capsuleGeometry args={[0.31, 0.5, 8, 16]} />
-        <meshStandardMaterial color={TEAL} roughness={0.6} />
+        <capsuleGeometry args={[0.32, 0.5, 8, 16]} />
+        <meshStandardMaterial color={NAVY} roughness={0.6} />
       </mesh>
-      {/* amber collar + belt — the brand accents */}
-      <mesh position={[0, -0.8, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.24, 0.045, 10, 24]} />
-        <meshStandardMaterial color={AMBER} roughness={0.4} />
+      {/* GOLD polo collar — a band at the neck, like the real shirt */}
+      <mesh position={[0, -0.79, 0]}>
+        <cylinderGeometry args={[0.19, 0.235, 0.11, 20]} />
+        <meshStandardMaterial color={GOLD} roughness={0.45} />
       </mesh>
-      <mesh position={[0, -1.38, 0]}>
-        <cylinderGeometry args={[0.315, 0.315, 0.09, 20]} />
-        <meshStandardMaterial color={AMBER} roughness={0.4} />
+      {/* small gold placket line down the chest */}
+      <mesh position={[0, -0.97, 0.312]}>
+        <boxGeometry args={[0.05, 0.24, 0.02]} />
+        <meshStandardMaterial color={GOLD} roughness={0.45} />
+      </mesh>
+      {/* plain dark belt where polo meets trousers */}
+      <mesh position={[0, -1.4, 0]}>
+        <cylinderGeometry args={[0.325, 0.325, 0.07, 20]} />
+        <meshStandardMaterial color={NAVY_DARK} roughness={0.6} />
       </mesh>
 
       {/* ------------------------------ legs (hip pivots) ------------------ */}
       <group ref={legL} position={[-0.15, -1.48, 0]}>
         <mesh position={[0, -0.3, 0]}>
           <capsuleGeometry args={[0.11, 0.42, 6, 12]} />
-          <meshStandardMaterial color={TEAL_DARK} roughness={0.7} />
+          <meshStandardMaterial color={TROUSER} roughness={0.7} />
         </mesh>
         <mesh position={[0, -0.66, 0.05]}>
           <boxGeometry args={[0.16, 0.09, 0.3]} />
-          <meshStandardMaterial color={AMBER} roughness={0.45} />
+          <meshStandardMaterial color={SLEEVE} roughness={0.5} />
         </mesh>
       </group>
       <group ref={legR} position={[0.15, -1.48, 0]}>
         <mesh position={[0, -0.3, 0]}>
           <capsuleGeometry args={[0.11, 0.42, 6, 12]} />
-          <meshStandardMaterial color={TEAL_DARK} roughness={0.7} />
+          <meshStandardMaterial color={TROUSER} roughness={0.7} />
         </mesh>
         <mesh position={[0, -0.66, 0.05]}>
           <boxGeometry args={[0.16, 0.09, 0.3]} />
-          <meshStandardMaterial color={AMBER} roughness={0.45} />
+          <meshStandardMaterial color={SLEEVE} roughness={0.5} />
         </mesh>
       </group>
     </group>

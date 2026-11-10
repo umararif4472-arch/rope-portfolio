@@ -11,13 +11,16 @@
  *     that is the "lag behind" part of the scared reaction.
  *  3. The verlet RopeSim steps, and the rope mesh (a TubeGeometry rebuilt
  *     from the sim points) follows it — stretching/shortening visibly.
- *  4. The character group is placed on the rope's last point, tilted by
- *     the rope's swing angle like a real pendulum.
+ *  4. The character group is placed on the rope's last point. His X is
+ *     HARD-LOCKED to the anchor line (plus a deliberate micro-sway of a
+ *     few hundredths of a unit): the anchor is nailed to the right side
+ *     of the screen and scrolling only ever changes the rope's LENGTH.
+ *     He travels straight down/up like a lift — he cannot wander.
  *  5. His screen position is projected and published to
  *     `characterScreenPos` so the DOM speech bubble can follow him.
  *
  * Welcome drop: the spring starts at a very short length high above the
- * hero target, so on load he drops in, swings, and settles on his own.
+ * hero target, so on load he drops in with one gentle wiggle and settles.
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -40,6 +43,10 @@ export default function RopeCharacter() {
   // section's destination eases in instead of yanking him (see config).
   const smoothTarget = useRef(0.6);
   const welcomed = useRef(false);
+  // Smoothed micro-sway amplitude (world units) + when the welcome wiggle
+  // started, so the one welcome sway can decay away gracefully.
+  const swayAmp = useRef(0);
+  const welcomeStart = useRef<number | null>(null);
 
   const sim = useMemo(
     () => new RopeSim(new THREE.Vector3(0, 0, 0), 0.6),
@@ -58,9 +65,10 @@ export default function RopeCharacter() {
 
   useEffect(() => {
     sim.setAnchor(anchorFor(isMobileNow()));
-    // Welcome drop: one sideways kick so he swings as he lands.
+    // Welcome drop: he simply lowers in; the frame loop adds ONE small
+    // decaying wiggle (see welcomeStart below) — no sideways kick, so he
+    // can never swing off his anchor line even on arrival.
     const id = window.setTimeout(() => {
-      if (!prefersReducedMotion) sim.kick(1.1); // gentle nudge, not a shove
       welcomed.current = true;
     }, 350);
     return () => window.clearTimeout(id);
@@ -109,19 +117,34 @@ export default function RopeCharacter() {
     // else: frozen target = he lags behind while you scroll too fast.
     sim.targetLength = spring.current.length;
 
-    // -- sway: gentle idle breeze, panicked-but-capped when dragged fast -----
-    // Amplitudes/frequencies are deliberately modest: the scared swing must
-    // READ as panic, not as the rope breaking. (Plus the sim itself clamps
-    // every point's speed via ROPE.maxPointSpeed.)
-    if (prefersReducedMotion) {
-      sim.swayForce = 0;
-    } else if (store.isFastScrolling || store.mood === 'swing') {
-      sim.swayForce = Math.sin(t * 4.6) * 13;
-    } else if (store.mood === 'scared') {
-      sim.swayForce = Math.sin(t * 16) * 5;
-    } else {
-      sim.swayForce = Math.sin(t * 0.55) * FOLLOW.idleSway * 22;
+    // -- sway: a MICRO-sway only, and only while parked at a section -------
+    // Fix pass 2: sway is no longer a force (forces made him wander). It
+    // is a tiny target offset fed to the sim's X-lock: at most
+    // FOLLOW.idleSway (0.02 world units ≈ a few pixels) while he hangs
+    // still, switching OFF completely while he is travelling so the glide
+    // is perfectly straight, and capped at ROPE.scaredSway during the
+    // scared reaction — a shiver on the spot, never a trip across screen.
+    const travelling =
+      Math.abs(spring.current.velocity) > 0.04 ||
+      Math.abs(smoothTarget.current - spring.current.length) > 0.02;
+    const panicking =
+      store.isFastScrolling || store.mood === 'swing' || store.mood === 'scared';
+    let ampTarget = 0;
+    if (!prefersReducedMotion) {
+      ampTarget = panicking ? ROPE.scaredSway : travelling ? 0 : FOLLOW.idleSway;
     }
+    swayAmp.current = THREE.MathUtils.damp(swayAmp.current, ampTarget, 3, dt);
+    let swayOffset = Math.sin(t * 0.55) * swayAmp.current;
+    // One gentle welcome wiggle that decays away over ~3 s.
+    if (welcomed.current && welcomeStart.current === null) welcomeStart.current = t;
+    if (welcomeStart.current !== null && !prefersReducedMotion) {
+      const wt = t - welcomeStart.current;
+      if (wt < 4) swayOffset += Math.sin(wt * 2.4) * 0.04 * Math.exp(-wt * 1.15);
+    }
+    sim.swayOffsetX = THREE.MathUtils.clamp(swayOffset, -ROPE.maxSway, ROPE.maxSway);
+    // While travelling, the rope gets the extra-strong "through honey"
+    // damping; while parked, the normal calm damping.
+    sim.motionDamping = travelling ? ROPE.motionDamping : ROPE.damping;
 
     // -- 3. step the rope (at the calmer physics time scale from config) -----
     sim.step(dt * ROPE.timeScale);
@@ -133,8 +156,11 @@ export default function RopeCharacter() {
     tubeRef.current.geometry = geo;
 
     // -- 4. place the character on the rope end --------------------------------
+    // His X is taken from the anchor line + micro-sway directly (not from
+    // the sim), so the character group can NEVER sit anywhere else.
     const end = sim.endPoint;
     charRef.current.position.copy(end);
+    charRef.current.position.x = anchor.x + sim.swayOffsetX;
     charRef.current.rotation.z = prefersReducedMotion ? 0 : -sim.bottomAngle * 0.75;
     charRef.current.scale.setScalar(scale);
 
@@ -143,6 +169,7 @@ export default function RopeCharacter() {
 
     // -- 5. publish screen position for the speech bubble -----------------------
     tmp.copy(end);
+    tmp.x = anchor.x + sim.swayOffsetX; // same locked X the character uses
     tmp.y -= 0.5 * scale; // approx. his head
     tmp.project(camera);
     const w = window.innerWidth;
