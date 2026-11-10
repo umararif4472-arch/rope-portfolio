@@ -24,12 +24,12 @@ export default function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-[#071512]/80 backdrop-blur-md">
       <nav
-        className="mx-auto flex h-[64px] max-w-6xl items-center justify-between px-5"
+        className="mx-auto flex h-[64px] max-w-6xl items-center justify-between px-4 sm:px-5"
         aria-label="Main navigation"
       >
         <button
           onClick={() => go('hero')}
-          className="flex items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B]"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B]"
           aria-label={`${SITE.name} — back to top`}
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D99A2B] text-sm font-black text-[#071512]">
@@ -40,13 +40,24 @@ export default function Navbar() {
           </span>
         </button>
 
-        <ul className="flex items-center gap-1 sm:gap-2">
+        {/* On narrow phones the six links don't fit next to the brand at
+            full size: they run smaller, the "Home" link hides under
+            400px (the brand button already goes home), and as a last
+            resort the row can scroll sideways instead of pushing links
+            off-screen (audit fix — "Experience"/"Contact" were clipped
+            or unreachable at 390px). */}
+        <ul className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2 sm:overflow-visible">
           {SECTIONS.map((s) => (
-            <li key={s.id}>
+            <li
+              key={s.id}
+              className={
+                s.id === 'hero' ? 'shrink-0 max-[400px]:hidden' : 'shrink-0'
+              }
+            >
               <button
                 onClick={() => go(s.id)}
                 aria-current={currentSection === s.id ? 'true' : undefined}
-                className={`rounded-full px-3 py-2 text-[13px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B] sm:text-sm ${
+                className={`rounded-full px-2 py-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B] sm:px-3 sm:py-2 sm:text-sm ${
                   currentSection === s.id
                     ? 'bg-[#D99A2B]/15 text-[#D99A2B]'
                     : 'text-white/70 hover:text-white'

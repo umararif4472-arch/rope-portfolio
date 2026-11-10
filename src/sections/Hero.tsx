@@ -23,8 +23,13 @@ export default function Hero() {
       />
       <div className="mx-auto w-full max-w-6xl px-5 py-20">
         <div className="max-w-2xl">
-          <p className="reveal inline-flex items-center gap-2 rounded-full bg-[#D99A2B]/12 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#D99A2B] ring-1 ring-[#D99A2B]/30">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#D99A2B]" aria-hidden="true" />
+          {/* Audit fix: on small screens the one-line pill ran UNDER the
+              stuck guide medallion and its text was partially hidden.
+              Below 680px the pill is width-capped (100vw − 9rem keeps it
+              clear of the medallion's left edge) and wraps fully visible
+              instead. Desktop rendering is unchanged. */}
+          <p className="reveal inline-flex max-w-full items-center gap-2 rounded-full bg-[#D99A2B]/12 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#D99A2B] ring-1 ring-[#D99A2B]/30 max-[680px]:max-w-[calc(100vw-9rem)] max-[680px]:text-[11px] max-[680px]:leading-snug">
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#D99A2B]" aria-hidden="true" />
             {SITE.availability}
           </p>
           <h1 className="reveal mt-6 text-5xl font-black leading-[1.04] tracking-tight text-white sm:text-7xl">
@@ -53,7 +58,7 @@ export default function Hero() {
               Get in touch
             </button>
           </div>
-          <p className="reveal mt-10 text-sm text-white/40">
+          <p className="reveal mt-10 text-sm text-white/50">
             Psst — the little guy hanging on the right is my guide. Scroll slowly… he scares easily. 🪢
           </p>
         </div>

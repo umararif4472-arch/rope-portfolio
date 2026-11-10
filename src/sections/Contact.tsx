@@ -25,7 +25,7 @@ export default function Contact() {
   };
 
   const inputCls =
-    'w-full rounded-xl bg-white/[0.05] px-4 py-3 text-white placeholder-white/35 ring-1 ring-white/10 transition focus:outline-none focus:ring-2 focus:ring-[#D99A2B]';
+    'w-full rounded-xl bg-white/[0.05] px-4 py-3 text-white placeholder-white/50 ring-1 ring-white/10 transition focus:outline-none focus:ring-2 focus:ring-[#D99A2B]';
 
   return (
     <section
@@ -134,7 +134,7 @@ export default function Contact() {
           </form>
         </div>
 
-        <footer className="mt-24 border-t border-white/10 pt-8 pb-4 text-center text-sm text-white/40">
+        <footer className="mt-24 border-t border-white/10 pt-8 pb-4 text-center text-sm text-white/50">
           <p>
             © {new Date().getFullYear()} {SITE.name} · {SITE.location} · Built
             with React, Three.js and one very brave rope. 🪢
