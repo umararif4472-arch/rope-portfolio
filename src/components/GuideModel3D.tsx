@@ -23,6 +23,12 @@
  *    rope, waits ~1 s, drops back into the exact same spot with a ≤4px
  *    settle, then the bubble says the greeting and the section's text.
  *    The same drop-in plays once on page load (welcome text instead).
+ *    Travel is dressed like rope travel: a ≤3° lean that builds and
+ *    melts, a ≤3px hand-over-hand bob on the climb, and a ~4° knee
+ *    bend absorbing the landing. Symmetry is guaranteed two ways:
+ *    a geometric watchdog re-derives the section from live layout
+ *    (direction-agnostic, repeat-friendly), and a speech lock stops
+ *    the fast-scroll director from clearing the greeting's queue.
  *  - With prefers-reduced-motion ALL motion is off: frozen statue,
  *    bubble swaps greeting → section text in place.
  *
@@ -182,6 +188,8 @@ interface LifeBones {
   head?: LifeBone;
   thighL?: LifeBone;
   thighR?: LifeBone;
+  shinL?: LifeBone;
+  shinR?: LifeBone;
 }
 
 function captureLifeBones(scene: THREE.Object3D): LifeBones {
@@ -198,6 +206,9 @@ function captureLifeBones(scene: THREE.Object3D): LifeBones {
     head: grab(['Head']),
     thighL: grab(['LeftUpLeg']),
     thighR: grab(['RightUpLeg']),
+    // Shins join the thighs for the landing knee-bend absorb.
+    shinL: grab(['LeftLeg']),
+    shinR: grab(['RightLeg']),
   };
 }
 
@@ -346,10 +357,13 @@ export function HangingFigure({
   onReady,
   motionEnabled,
   motionTimeRef,
+  landingRef,
 }: {
   onReady?: () => void;
   motionEnabled: boolean;
   motionTimeRef: RefObject<number>;
+  /** Motion-clock time of the most recent arrival landing (knees). */
+  landingRef: RefObject<number>;
 }) {
   const { scene } = useGLTF(MODEL_PATH);
   const invalidate = useThree((s) => s.invalidate);
@@ -399,8 +413,37 @@ export function HangingFigure({
     const swayPhase = (TAU * t) / M.swayPeriodS;
     const lagPhase = (TAU * M.legLagS) / M.swayPeriodS;
     const legAngle = -rad(M.legLagDeg) * Math.sin(swayPhase - lagPhase);
-    if (bones.thighL) applyWorldDelta(bones.thighL, axisDelta(0, 0, 1, legAngle));
-    if (bones.thighR) applyWorldDelta(bones.thighR, axisDelta(0, 0, 1, legAngle));
+
+    // Landing absorb: for kneeBendMs after a touchdown, his knees
+    // soften and straighten again — thighs pitch a touch toward the
+    // viewer (hip flexion) while the shins fold a touch more the
+    // other way, which is what a real knee does when it takes weight.
+    // Envelope sin(πq) = out-and-back, peak at half-time. Composed
+    // INTO the thigh delta (one reset per bone per frame, as always).
+    const A = CHARACTER.arrival;
+    const sinceLand = t - landingRef.current;
+    const bendWin = A.kneeBendMs / 1000;
+    let thighPitch = 0;
+    let shinPitch = 0;
+    if (sinceLand >= 0 && sinceLand <= bendWin) {
+      const env = Math.sin(Math.PI * (sinceLand / bendWin));
+      thighPitch = rad(A.kneeBendDeg) * env;
+      shinPitch = -rad(A.kneeBendDeg) * 0.8 * env;
+    }
+    if (bones.thighL) {
+      applyWorldDelta(
+        bones.thighL,
+        axisDelta(0, 0, 1, legAngle).multiply(axisDelta(1, 0, 0, thighPitch)),
+      );
+    }
+    if (bones.thighR) {
+      applyWorldDelta(
+        bones.thighR,
+        axisDelta(0, 0, 1, legAngle).multiply(axisDelta(1, 0, 0, thighPitch)),
+      );
+    }
+    if (bones.shinL) applyWorldDelta(bones.shinL, axisDelta(1, 0, 0, shinPitch));
+    if (bones.shinR) applyWorldDelta(bones.shinR, axisDelta(1, 0, 0, shinPitch));
   });
 
   useEffect(() => {
@@ -520,6 +563,8 @@ interface ArrivalState {
   lastSeen: SectionConfig['id'];
   /** Motion-clock time `lastSeen` last changed. */
   seenAt: number;
+  /** Motion-clock time the scroll last moved at real speed. */
+  stillSince: number;
   /** Last section he has spoken for (or landed on, on load). */
   spoken: SectionConfig['id'];
 }
@@ -535,18 +580,42 @@ function descendOffset(p: number, from: number, settlePx: number): number {
   return settlePx * (1 - easeInOut(q));
 }
 
+/**
+ * Which section straddles the 55% viewport line RIGHT NOW, read from
+ * live layout. This mirrors App's ScrollTrigger rule ('top 55%' …
+ * 'bottom 55%') but is computed from geometry on demand, so it cannot
+ * be missed, swallowed or invalidated the way a scroll event can —
+ * the arrival machine watches BOTH sources (see the watchdog in the
+ * rAF below). Direction-agnostic by construction: the same answer
+ * scrolling up, down, or landing on a section you've visited before.
+ */
+function geometricSectionId(): SectionConfig['id'] | null {
+  if (typeof window === 'undefined') return null;
+  const line = window.innerHeight * 0.55;
+  for (const cfg of SECTIONS) {
+    const el = document.getElementById(cfg.id);
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.top <= line && r.bottom >= line) return cfg.id;
+  }
+  return null;
+}
+
 /** Greeting first, then the section's own explanation — same bubble. */
-function speakSection(id: SectionConfig['id']) {
+function speakSection(id: SectionConfig['id'], onDone?: () => void) {
   const cfg = SECTIONS.find((s) => s.id === id);
   if (!cfg) return;
   const A = CHARACTER.arrival;
-  useStore.getState().saySequence([
-    { text: A.greetingText, durationMs: A.greetingMs },
-    {
-      text: isMobileNow() ? cfg.mobileBubbleText : cfg.bubbleText,
-      durationMs: BUBBLE.sectionDurationMs,
-    },
-  ]);
+  useStore.getState().saySequence(
+    [
+      { text: A.greetingText, durationMs: A.greetingMs },
+      {
+        text: isMobileNow() ? cfg.mobileBubbleText : cfg.bubbleText,
+        durationMs: BUBBLE.sectionDurationMs,
+      },
+    ],
+    onDone,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +629,10 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
    *  arrival machine AND the in-scene bone life, so they never drift. */
   const motionTimeRef = useRef(0);
   const readyRef = useRef(false);
+  /** Motion-clock time of the latest landing (drives the knee bend). */
+  const landingRef = useRef(-Infinity);
+  /** Motion-clock time of the last geometric-section watchdog check. */
+  const lastWatchRef = useRef(0);
   /** Pixels he must travel up to leave the screen fully (set by publish). */
   const travelRef = useRef(900);
   const arrivalRef = useRef<ArrivalState>({
@@ -572,10 +645,13 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
     loadSpoken: 'hero',
     lastSeen: 'hero',
     seenAt: 0,
+    stillSince: 0,
     spoken: 'hero',
   });
   /** Reduced-motion mode: last section greeted by text swap alone. */
   const reducedSpokenRef = useRef<SectionConfig['id'] | null>(null);
+  /** Token of the current arrival speech lock (store-owned). */
+  const speechTokenRef = useRef(0);
 
   useEffect(() => {
     // Publish his fixed geometry for the speech bubble — on mount and
@@ -647,12 +723,25 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
         if (!st.welcomed || st.currentSection !== id) return;
         if (reducedSpokenRef.current === id) return;
         reducedSpokenRef.current = id;
-        speakSection(id);
+        const token = st.beginArrivalSpeech();
+        speakSection(id, () => useStore.getState().endArrivalSpeech(token));
       }, CHARACTER.arrival.debounceMs);
     });
+    // Same geometric watchdog as the animated path (below): keep the
+    // store's section honest from live layout, both scroll directions.
+    // A new section found here flows through the subscription above,
+    // whose repeat-guard only suppresses greeting the SAME section
+    // twice in a row — leaving and returning re-greets, as it should.
+    const watch = window.setInterval(() => {
+      const geo = geometricSectionId();
+      if (geo && geo !== useStore.getState().currentSection) {
+        useStore.getState().setSection(geo);
+      }
+    }, 250);
     return () => {
       unsub();
       window.clearTimeout(timer);
+      window.clearInterval(watch);
     };
   }, []);
 
@@ -678,8 +767,39 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
         arr.lastSeen = store.currentSection;
         arr.seenAt = t;
       }
-      const settled = t - arr.seenAt >= A.debounceMs / 1000;
+      // Geometric watchdog (~every 150 ms): App's ScrollTriggers are
+      // one driver of currentSection, but an event can be missed or
+      // invalidated on a real phone (mobile URL-bar resizes refresh
+      // trigger geometry mid-gesture). Live layout can't lie and
+      // doesn't care about scroll DIRECTION — if geometry says a
+      // different section owns the 55% line, believe geometry. This
+      // is what guarantees arrivals fire symmetrically: up, down,
+      // first visit or fiftieth.
+      if (t - lastWatchRef.current >= 0.15) {
+        lastWatchRef.current = t;
+        const geo = geometricSectionId();
+        if (geo && geo !== store.currentSection) {
+          store.setSection(geo);
+          arr.lastSeen = geo;
+          arr.seenAt = t;
+        }
+      }
+      // "Settled" also requires the SCROLL to have stopped: a section
+      // the reader is merely gliding through on momentum must not
+      // trigger a routine — only the section they actually land on
+      // does, exactly once. The hard cap (debounce + 1.2 s of section
+      // stability) guarantees a creeping scroll can never starve an
+      // arrival forever.
+      if (Math.abs(store.scrollVelocity) >= 3) arr.stillSince = t;
+      const settled =
+        t - arr.seenAt >= A.debounceMs / 1000 &&
+        (t - arr.stillSince >= A.debounceMs / 1000 ||
+          t - arr.seenAt >= A.debounceMs / 1000 + 1.2);
       const travel = travelRef.current;
+      // Travel dressing for THIS frame (see the composition below):
+      // a lean while the rope carries him, and the climb bob.
+      let travelTiltDeg = 0;
+      let travelBobPx = 0;
 
       switch (arr.phase) {
         case 'risen': {
@@ -706,6 +826,12 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
             arr.since = t;
             arr.from = arr.offset;
             arr.target = arr.lastSeen;
+            // Raise the arrival speech lock for the whole routine:
+            // the fast-scroll director's scared/calm lines must not
+            // clear the greeting sequence out from under him (a
+            // say() wipes the queue). Lowered by the sequence's own
+            // onDone at landing — exact, not a duration estimate.
+            speechTokenRef.current = store.beginArrivalSpeech();
           }
           break;
         }
@@ -716,6 +842,15 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
           const p = Math.min((t - arr.since) / (A.riseMs / 1000), 1);
           const e = p * p; // ease-in: he accelerates away up the rope
           arr.offset = arr.from + (-travel - arr.from) * e;
+          // Rope-travel dressing: he leans back against the climb
+          // (builds with the journey, gone by the top) and pulls
+          // himself up in tiny hand-over-hand tugs (≤3px, enveloped
+          // in/out so the climb starts and ends smooth).
+          travelTiltDeg = -A.travelTiltDeg * Math.sin(Math.PI * p);
+          travelBobPx =
+            -A.climbBobPx *
+            Math.abs(Math.sin(Math.PI * A.climbBobCycles * p)) *
+            Math.sin(Math.PI * p);
           if (p >= 1) {
             arr.phase = 'waiting';
             arr.since = t;
@@ -741,9 +876,14 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
         case 'descending': {
           const p = Math.min((t - arr.since) / (A.descendMs / 1000), 1);
           arr.offset = descendOffset(p, arr.from, A.settlePx);
+          // Lowering him, the lean swings the other way — the rope
+          // eases him down and his body trails it, melting to zero
+          // exactly as he lands (the knee bend takes it from there).
+          travelTiltDeg = A.travelTiltDeg * 0.8 * Math.sin(Math.PI * p);
           if (p >= 1) {
             arr.offset = 0;
             arr.phase = 'idle';
+            landingRef.current = t; // knees absorb from this instant
             if (arr.speakOnLand) {
               // If yet another section settled during the drop,
               // greet the one he actually landed on.
@@ -751,7 +891,8 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
                 settled && arr.lastSeen !== arr.speakOnLand
                   ? arr.lastSeen
                   : arr.speakOnLand;
-              speakSection(id);
+              const token = speechTokenRef.current;
+              speakSection(id, () => store.endArrivalSpeech(token));
               arr.spoken = id;
             } else {
               // Load landing: the welcome sequence owns his voice.
@@ -769,14 +910,16 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
       // Compose sway + arrival into the wrapper's ONE transform.
       // Pivot (transform-origin: 50% 0 on .guide-sway) is the rope's
       // anchor at the top of the viewport, so the rotate() IS the
-      // pendulum; the translateY() is the arrival climb/drop.
+      // pendulum; the translateY() is the arrival climb/drop. The
+      // travel tilt rides INSIDE the same rotate() and the climb bob
+      // inside the same translateY() — still one writer, one clock.
       const sway =
         M.swayDeg * Math.sin((TAU * t) / M.swayPeriodS) +
         M.swayHarmonicDeg *
           Math.sin((TAU * t) / M.swayHarmonicPeriodS + 1.3);
       const el = wrapRef.current;
       if (el) {
-        el.style.transform = `translate3d(0, ${arr.offset.toFixed(2)}px, 0) rotate(${sway.toFixed(4)}deg)`;
+        el.style.transform = `translate3d(0, ${(arr.offset + travelBobPx).toFixed(2)}px, 0) rotate(${(sway + travelTiltDeg).toFixed(4)}deg)`;
       }
     };
     raf = requestAnimationFrame(loop);
@@ -843,6 +986,7 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
                 }}
                 motionEnabled={!prefersReducedMotion}
                 motionTimeRef={motionTimeRef}
+                landingRef={landingRef}
               />
             </Suspense>
           </Canvas>

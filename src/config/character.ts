@@ -182,6 +182,27 @@ export const CHARACTER = {
      */
     settlePx: 4,
     /**
+     * TRAVEL TILT — while the rope carries him up or down, he leans a
+     * few degrees like a real body hanging from a moving rope: the
+     * tilt builds with the travel and melts back into the idle sway
+     * by the time he lands. Degrees, hard cap 3 — a lean, not a swing.
+     */
+    travelTiltDeg: 2.6,
+    /**
+     * CLIMB BOB — while he RISES, tiny upward tugs (hand-over-hand
+     * feel): this many px per tug, this many tugs across the climb.
+     * Never more than 3px — you sense the effort more than see it.
+     */
+    climbBobPx: 2.5,
+    climbBobCycles: 2,
+    /**
+     * LANDING ABSORB — when he touches down, his knees soften by this
+     * many degrees and straighten again over kneeBendMs, like real
+     * legs taking his weight. ~4° is a dip, not a squat.
+     */
+    kneeBendDeg: 4,
+    kneeBendMs: 320,
+    /**
      * A section must be on screen this long (ms) before the routine
      * triggers — this is what makes fast fly-by scrolling skip the
      * in-between sections.

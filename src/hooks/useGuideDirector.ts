@@ -58,11 +58,17 @@ export function useGuideDirector() {
             lastScaredAt = now;
             scaredUntil = now + FAST_SCROLL.scaredDurationSeconds;
             state.setMood('scared');
-            const lines = FAST_SCROLL.scaredLines;
-            state.say(
-              lines[Math.floor(Math.random() * lines.length)],
-              BUBBLE.reactionDurationMs,
-            );
+            // …but never SHOUT over an arrival: while the guide's
+            // greeting → section explanation is playing (speech lock),
+            // a say() here would clear its queue and eat the section's
+            // line. The mood still flips; the line is skipped.
+            if (!state.arrivalSpeaking) {
+              const lines = FAST_SCROLL.scaredLines;
+              state.say(
+                lines[Math.floor(Math.random() * lines.length)],
+                BUBBLE.reactionDurationMs,
+              );
+            }
           }
         }
       } else {
@@ -78,7 +84,12 @@ export function useGuideDirector() {
             // Back to whatever the current section wants him to do.
             const s = SECTIONS.find((x) => x.id === state.currentSection);
             state.setMood(s?.animation ?? 'idle');
-            state.say(FAST_SCROLL.calmLine, BUBBLE.reactionDurationMs);
+            // The calm line lands ~2 s after a flick stops — exactly
+            // when an arrival's greeting is playing. Same rule as the
+            // scared line: never clear the arrival's speech queue.
+            if (!state.arrivalSpeaking) {
+              state.say(FAST_SCROLL.calmLine, BUBBLE.reactionDurationMs);
+            }
           }
         }
       }

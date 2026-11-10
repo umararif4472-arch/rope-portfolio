@@ -22,20 +22,48 @@ let bubbleTimer: number | undefined;
  */
 let bubbleQueue: Array<{ text: string; durationMs: number }> = [];
 
+/** Fired once when a `saySequence` queue drains NATURALLY (not when
+ *  it is interrupted by `say()`/`hideBubble()`, which drop it). */
+let queueOnDone: (() => void) | undefined;
+
+function drainQueue() {
+  const cb = queueOnDone;
+  queueOnDone = undefined;
+  if (cb) cb();
+}
+
 function showNextBubble(
   set: (partial: Partial<GuideState>) => void,
 ) {
   const next = bubbleQueue.shift();
   if (!next) {
     set({ bubbleVisible: false });
+    drainQueue();
     return;
   }
   set({ bubbleText: next.text, bubbleVisible: true });
   bubbleTimer = window.setTimeout(() => {
     if (bubbleQueue.length > 0) showNextBubble(set);
-    else set({ bubbleVisible: false });
+    else {
+      set({ bubbleVisible: false });
+      drainQueue();
+    }
   }, next.durationMs);
 }
+
+/**
+ * Arrival-speech lock bookkeeping. A duration ESTIMATE cannot do
+ * this job (travel runs on the motion clock, speech on wall-clock
+ * timeouts — the two drift apart under load), so the lock is a
+ * state flag instead: `beginArrivalSpeech` raises it when a routine
+ * starts travelling, and the routine's own `saySequence` lowers it
+ * via its onDone the moment the greeting + explanation have fully
+ * played. The token keeps a superseded routine's callback from
+ * lowering a newer routine's lock; the 30 s failsafe guarantees the
+ * lock can never stick if a queue is interrupted by a direct line.
+ */
+let arrivalSpeechToken = 0;
+let arrivalSpeechFailsafe: number | undefined;
 
 interface GuideState {
   /** Id of the section currently in view ('hero', 'about', ...). */
@@ -60,20 +88,38 @@ interface GuideState {
    * (medallion fallback), this flips back to false and App speaks.
    */
   arrivalGuideMounted: boolean;
+  /**
+   * Speech lock: while true, an arrival routine is travelling or its
+   * greeting → section explanation is playing, and NO direct `say()`
+   * may clear the sequence queue (the fast-scroll director's
+   * scared/calm lines are the usual suspects). Raised/lowered only
+   * through `beginArrivalSpeech`/`endArrivalSpeech` below.
+   */
+  arrivalSpeaking: boolean;
 
   setSection: (id: SectionConfig['id']) => void;
+  /** Raise the arrival speech lock; returns its token. */
+  beginArrivalSpeech: () => number;
+  /** Lower the arrival speech lock if `token` is still current. */
+  endArrivalSpeech: (token: number) => void;
   setMood: (mood: Mood) => void;
   /**
    * Show a bubble with new text and auto-hide it after `durationMs`
    * (section default from config). Re-calling restarts text + timer.
-   * Clears any queued `saySequence` lines — a direct line always wins.
+   * Clears any queued `saySequence` lines — a direct line always wins,
+   * EXCEPT while the arrival speech lock is raised: then the direct
+   * line is dropped so it cannot eat an arrival's greeting/explanation.
    */
   say: (text: string, durationMs?: number) => void;
   /**
    * Show several lines one after another in the same bubble, each for
    * its own duration (used for greeting → section explanation).
+   * `onDone` fires once when the queue drains naturally.
    */
-  saySequence: (items: Array<{ text: string; durationMs: number }>) => void;
+  saySequence: (
+    items: Array<{ text: string; durationMs: number }>,
+    onDone?: () => void,
+  ) => void;
   hideBubble: () => void;
   setArrivalGuideMounted: (mounted: boolean) => void;
   setFastScrolling: (fast: boolean) => void;
@@ -81,7 +127,7 @@ interface GuideState {
   setScrollVelocity: (v: number) => void;
 }
 
-export const useStore = create<GuideState>((set) => ({
+export const useStore = create<GuideState>((set, get) => ({
   currentSection: 'hero',
   mood: 'idle',
   bubbleText: '',
@@ -90,26 +136,49 @@ export const useStore = create<GuideState>((set) => ({
   welcomed: false,
   scrollVelocity: 0,
   arrivalGuideMounted: false,
+  arrivalSpeaking: false,
 
   setSection: (id) => set({ currentSection: id }),
+  beginArrivalSpeech: () => {
+    arrivalSpeechToken += 1;
+    const token = arrivalSpeechToken;
+    window.clearTimeout(arrivalSpeechFailsafe);
+    arrivalSpeechFailsafe = window.setTimeout(() => {
+      if (arrivalSpeechToken === token) set({ arrivalSpeaking: false });
+    }, 30000);
+    set({ arrivalSpeaking: true });
+    return token;
+  },
+  endArrivalSpeech: (token) => {
+    if (arrivalSpeechToken !== token) return;
+    window.clearTimeout(arrivalSpeechFailsafe);
+    set({ arrivalSpeaking: false });
+  },
   setMood: (mood) => set({ mood }),
   say: (text, durationMs = BUBBLE.sectionDurationMs) => {
+    // The arrival speech lock outranks direct lines: while a routine
+    // is travelling or speaking, a direct line would wipe the
+    // greeting → explanation queue, so it is dropped instead.
+    if (get().arrivalSpeaking) return;
     window.clearTimeout(bubbleTimer);
     bubbleQueue = [];
+    queueOnDone = undefined;
     set({ bubbleText: text, bubbleVisible: true });
     bubbleTimer = window.setTimeout(
       () => set({ bubbleVisible: false }),
       durationMs,
     );
   },
-  saySequence: (items) => {
+  saySequence: (items, onDone) => {
     window.clearTimeout(bubbleTimer);
     bubbleQueue = [...items];
+    queueOnDone = onDone;
     showNextBubble(set);
   },
   hideBubble: () => {
     window.clearTimeout(bubbleTimer);
     bubbleQueue = [];
+    queueOnDone = undefined;
     set({ bubbleVisible: false });
   },
   setArrivalGuideMounted: (mounted) => set({ arrivalGuideMounted: mounted }),
