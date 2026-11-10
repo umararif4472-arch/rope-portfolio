@@ -8,7 +8,9 @@
  * avoids re-rendering React at 60fps; Zustand only changes when the TEXT
  * or visibility changes.
  *
- * Behaviour: typewriter text, pop in/out animation, auto-hide after the
+ * Behaviour: typewriter text, a simple opacity fade in/out (fix pass 5 —
+ * the bubble never moves the model; in fixed-guide mode its anchor, the
+ * medallion's published geometry, is constant), auto-hide after the
  * duration passed to the store's `say(text, durationMs)`, and the whole
  * bubble is clamped inside the viewport on every screen size.
  */
@@ -101,10 +103,8 @@ export default function SpeechBubble() {
       aria-live="polite"
     >
       <div
-        className={`relative max-w-[270px] rounded-2xl bg-white px-4 py-3 text-[13.5px] font-medium leading-snug text-slate-900 shadow-[0_18px_45px_rgba(0,0,0,0.45)] transition-all duration-300 sm:max-w-[300px] sm:text-sm ${
-          bubbleVisible
-            ? 'translate-y-0 scale-100 opacity-100'
-            : 'pointer-events-none translate-y-2 scale-90 opacity-0'
+        className={`relative max-w-[270px] rounded-2xl bg-white px-4 py-3 text-[13.5px] font-medium leading-snug text-slate-900 shadow-[0_18px_45px_rgba(0,0,0,0.45)] transition-opacity duration-300 sm:max-w-[300px] sm:text-sm ${
+          bubbleVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         role="status"
       >

@@ -47,18 +47,51 @@ export type Mood = keyof typeof CLIPS;
  * ---------------------------------------------------------------------------
  *  `useImageGuide: true` (the current live behaviour, fix pass 3):
  *  the visible guide is Umar's ACTUAL 3D-avatar render
- *  (public/guide-fallback.webp) shown as a round medallion that hangs from
- *  the end of the 3D rope — exact likeness, because it IS his picture.
- *  The moods become small medallion dances (sway / wiggle / dip / shake)
- *  instead of 3D-model animations, and his position is hard-clamped so he
- *  can NEVER leave the screen (see GuideMedallion.tsx).
+ *  (public/guide-fallback.webp) shown as a round medallion — exact
+ *  likeness, because it IS his picture.
  *
- *  Set it to `false` to go back to the 3D character (the procedural
- *  shapes character, or your real rigged model when public/model.glb
- *  exists — that code path stays in the codebase, just dormant).
+ *  `guideMode: 'fixed'` (fix pass 5 — Umar's final word on motion):
+ *  the medallion NEVER MOVES. Not while scrolling, not between
+ *  sections, not when he is "scared", not on load. It sits at ONE
+ *  fixed screen position set in plain CSS (see GuideMedallion.tsx and
+ *  the `.guide-fixed` rules in src/index.css), with a short static
+ *  rope segment above it. The ONLY things that still change are the
+ *  speech bubble's text and visibility — he still greets you, still
+ *  explains each section, still shouts when you scroll too fast…
+ *  he just says it all from his one stuck spot. In this mode the
+ *  Three.js canvas is not rendered at all, so no physics exists that
+ *  could ever move anything on screen.
+ *
+ *  Set `useImageGuide` to `false` to go back to the moving 3D
+ *  character (the procedural shapes character, or your real rigged
+ *  model when public/model.glb exists — that code path stays in the
+ *  codebase, just dormant).
  */
 export const CHARACTER = {
   useImageGuide: true,
+  /**
+   * How the image guide behaves. Only one mode exists now:
+   *  - 'fixed'  → the model NEVER moves; it is stuck at one fixed
+   *               screen position (right side, just below the navbar)
+   *               and only the speech bubble changes. (Fix pass 5.)
+   */
+  guideMode: 'fixed',
+  // -------------------------------------------------------------------------
+  //  FIXED POSITION (fix pass 5) — where the stuck model sits, forever
+  // -------------------------------------------------------------------------
+  //  His CSS top is `calc(navbar height + fixedNavGapPx)`: the navbar
+  //  height is measured from the real <header> once on load (and on
+  //  resize) and stored in the CSS variable --guide-nav-h. If that
+  //  measurement ever fails, the fallbacks below apply instead
+  //  (desktop 92px / mobile 84px total top offset).
+  /** Gap (px) left between the navbar's bottom edge and the model. */
+  fixedNavGapPx: 14,
+  /** Distance (px) from the RIGHT edge of the screen — desktop / mobile. */
+  fixedRightDesktopPx: 16,
+  fixedRightMobilePx: 12,
+  /** Fallback total `top` (px) if the navbar can't be measured. */
+  fixedTopFallbackDesktopPx: 92,
+  fixedTopFallbackMobilePx: 84,
   /** His avatar render, relative to the site base (public/ folder). */
   imageFile: 'guide-fallback.webp',
   /** Medallion diameter in px — desktop / mobile. */
@@ -81,7 +114,10 @@ export const CHARACTER = {
    */
   imagePosition: '50% 6%',
   // -------------------------------------------------------------------------
-  //  SAFE BAND (fix pass 4) — the medallion can NEVER hide behind the navbar
+  //  SAFE BAND (fix pass 4) — LEGACY: kept for reference only.
+  //  Fix pass 5's 'fixed' guide mode no longer glides the medallion
+  //  anywhere, so the band/glide values below are not used by the image
+  //  guide anymore (the 3D rope still uses ROPE/FOLLOW as before).
   // -------------------------------------------------------------------------
   //  Pass 3 clamped him to an 8px margin from the viewport top, which let
   //  him slide BEHIND the fixed navbar (~64px tall) and vanish. The

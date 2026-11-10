@@ -104,22 +104,27 @@ You don't need to model anything from scratch:
   for screen readers, no React re-renders at 60 fps.
 - **The face you see (fix pass 3):** the visible guide is Umar's *actual*
   3D-avatar render (`public/guide-fallback.webp`) in a gold-ringed round
-  medallion (`GuideMedallion.tsx`) that hangs from the rope's end point —
-  exact likeness, because it is his real picture. Moods become small
-  medallion dances (gentle sway, greeting wiggle/dip, scared shake). It is
-  a picture, not a rigged 3D model: set `CHARACTER.useImageGuide = false`
-  in `src/config/character.ts` to switch back to the 3D character
-  (procedural shapes, or your own `model.glb` — that code path is kept,
-  dormant, and takes over automatically when the file exists and the
-  flag is off).
-- **Always on screen — guaranteed:** every frame, the medallion's hook
-  position is hard-clamped so the whole medallion (metal ring included)
-  stays at least `CHARACTER.edgeMarginPx` (8 px) inside the viewport on
-  all four sides — during section glides, fast scrolling and the scared
-  shake alike. While clamped he waits at the edge, fully visible, until
-  the section target comes back into range (the rope length adjusts via
-  the follow spring), and a small SVG segment in the overlay bridges any
-  gap between the 3D rope's end and his hook so he always looks attached.
+  medallion (`GuideMedallion.tsx`) — exact likeness, because it is his
+  real picture. It is a picture, not a rigged 3D model: set
+  `CHARACTER.useImageGuide = false` in `src/config/character.ts` to
+  switch back to the 3D character (procedural shapes, or your own
+  `model.glb` — that code path is kept, dormant, and takes over
+  automatically when the file exists and the flag is off).
+- **The model NEVER moves (fix pass 5):** after several passes of
+  ever-calmer motion, Umar's final call was "it STICK" — so in the
+  default `CHARACTER.guideMode = 'fixed'` the medallion sits at ONE
+  fixed screen position in plain CSS (`.guide-fixed` in
+  `src/index.css`): right side, just below the navbar
+  (`top: calc(navbar height + 14px)`, the navbar height measured once
+  from the real `<header>`; `right: 16px`, 12px on mobile). Identical
+  on every section, every scroll position, every mood — no glide, no
+  sway, no scared shake, no drop-in. A short static rope segment (a
+  plain div) runs from the top of the viewport to his hook ring, and
+  the Three.js canvas is not rendered at all in this mode, so no
+  physics exists that could move anything. The ONLY things that still
+  change are the speech bubble's text and visibility: he still greets
+  you, explains each section, and shouts his scared line when you
+  scroll too fast — he just says it all from his one stuck spot.
 
 ## Performance & accessibility notes
 

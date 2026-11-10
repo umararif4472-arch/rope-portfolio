@@ -9,9 +9,12 @@
  *     visit; he only repeats a section after you leave and come back.
  *  3. The welcome sequence: loading overlay → he drops in on the rope →
  *     waves → typewriter welcome bubble → auto-hide after ~5 s.
+ *     (In fixed image-guide mode there is no drop-in: he is stuck in
+ *     place from the first frame and only the bubble speaks.)
  *  4. Reveal animations for every `.reveal` element.
  *  5. If WebGL is unavailable, the 3D layer is swapped for the 2D
- *     FallbackGuide — everything else works identically.
+ *     FallbackGuide — everything else works identically. (Fixed image
+ *     mode doesn't need WebGL at all — no canvas is rendered.)
  */
 import { useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
@@ -36,6 +39,14 @@ import Experience from './sections/Experience';
 import Contact from './sections/Contact';
 
 gsap.registerPlugin(ScrollTrigger);
+
+/**
+ * Fix pass 5: in 'fixed' image-guide mode the model is STUCK (plain CSS
+ * position, static rope segment) and the Three.js canvas is not rendered
+ * at all — no physics exists that could move anything on screen.
+ */
+const IMAGE_FIXED =
+  CHARACTER.useImageGuide && CHARACTER.guideMode === 'fixed';
 
 function webglAvailable(): boolean {
   try {
@@ -131,6 +142,12 @@ export default function App() {
   // ---- loading → welcome sequence ----------------------------------------------
   useEffect(() => {
     if (loadingDone) return;
+    if (IMAGE_FIXED) {
+      // No 3D scene is mounted in fixed mode, so there is nothing to
+      // wait for — the guide is a plain <img> in a fixed CSS position.
+      setLoadingDone(true);
+      return;
+    }
     if (!active && progress >= 100) {
       setLoadingDone(true);
       return;
@@ -143,7 +160,9 @@ export default function App() {
   useEffect(() => {
     if (!loadingDone) return;
     const store = useStore.getState();
-    // He drops in (≈1 s of spring + swing), then waves and says hello.
+    // In 3D mode he drops in (≈1 s of spring + swing) first; in fixed
+    // image mode he is simply THERE — stuck — from the first frame.
+    // Either way he then "waves" (store mood) and says hello.
     const waveTimer = window.setTimeout(() => {
       store.setMood('wave');
       store.say(WELCOME_TEXT, BUBBLE.welcomeDurationMs);
@@ -177,12 +196,20 @@ export default function App() {
         <Contact />
       </main>
 
-      {webgl ? (
+      {IMAGE_FIXED ? (
+        <>
+          {/* Fix pass 5: NO <Scene/> here — the Three.js canvas is not
+              rendered at all in fixed mode. The guide is the stuck CSS
+              medallion + static rope segment; only the bubble changes. */}
+          <GuideMedallion />
+          <SpeechBubble />
+        </>
+      ) : webgl ? (
         <>
           <Scene />
-          {/* Fix pass 3: with the image guide on, the visible character is
-              Umar's real avatar medallion hanging on the rope's end
-              (the 3D rope still renders inside <Scene/>). */}
+          {/* With the (non-fixed) image guide on, the visible character
+              is Umar's real avatar medallion; the 3D rope still renders
+              inside <Scene/>. */}
           {CHARACTER.useImageGuide && <GuideMedallion />}
           <SpeechBubble />
         </>

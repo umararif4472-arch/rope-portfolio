@@ -22,6 +22,48 @@ body {
   overflow-x: hidden;
 }
 
+/*
+ * FIXED GUIDE (fix pass 5) — the model NEVER moves.
+ * One fixed screen position, in plain CSS: right side, just below the
+ * navbar. --guide-nav-h is the navbar's real height, measured from the
+ * <header> by GuideMedallion.tsx and stored on :root (re-measured on
+ * resize). If it is ever missing, the fallbacks make `top` land on
+ * 92px (desktop) / 84px (mobile): fallback-nav + the 14px gap.
+ * The numbers mirror CHARACTER.fixed* in src/config/character.ts.
+ */
+.guide-fixed {
+  position: fixed;
+  top: calc(var(--guide-nav-h, 78px) + 14px);
+  right: 16px;
+  z-index: 40;
+  pointer-events: none;
+}
+.guide-fixed .guide-box {
+  position: relative;
+  width: 160px;
+  height: 172px; /* 12px hook gap + 160px circle */
+}
+/* The short, static rope segment: viewport top → his hook ring. */
+.guide-fixed .guide-rope {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 8px); /* overlap a few px into the hook ring */
+  width: 4px;
+  height: 100vh; /* always reaches past the top of the screen */
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+@media (max-width: 767px) {
+  .guide-fixed {
+    top: calc(var(--guide-nav-h, 70px) + 14px);
+    right: 12px;
+  }
+  .guide-fixed .guide-box {
+    width: 104px;
+    height: 116px; /* 12px hook gap + 104px circle */
+  }
+}
+
 /* Lenis recommended base styles */
 html.lenis,
 html.lenis body {

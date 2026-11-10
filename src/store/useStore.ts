@@ -86,12 +86,12 @@ export const characterScreenPos = {
 };
 
 /**
- * Shared mutable object holding the IMAGE GUIDE medallion's final,
- * hard-clamped on-screen geometry (written every frame by
- * GuideMedallion.tsx after the always-on-screen clamp is applied).
- * The speech bubble follows THIS when the image guide is active, so it
- * always sits beside the medallion the visitor actually sees — even
- * while he is clamped at a viewport edge, waiting.
+ * Shared mutable object holding the IMAGE GUIDE medallion's on-screen
+ * geometry. Fix pass 5: the medallion is STUCK at a fixed CSS position,
+ * so GuideMedallion.tsx now writes this once on mount and again on
+ * resize (the only moments his position can change) — there is no
+ * per-frame writer anymore. The speech bubble follows THIS when the
+ * image guide is active, so it always sits beside the medallion.
  */
 export const guideScreenPos = {
   /** Centre of the medallion circle, in px. */
@@ -103,11 +103,12 @@ export const guideScreenPos = {
 };
 
 /**
- * Shared mutable object written every frame by GuideMedallion.tsx
- * (fix pass 4): the medallion's FINAL, safe-band-clamped hook position
- * in screen px. The 3D rope reads this and drives its target length
- * from it, so the rope follows the medallion — the medallion no longer
- * depends on the rope's physics to be visible.
+ * Shared mutable object for the medallion's hook position in screen px.
+ * In fix pass 4 the 3D rope read this every frame and drove its target
+ * length from it. In fix pass 5 (fixed mode) the canvas isn't rendered
+ * at all; GuideMedallion still publishes the (constant) values on
+ * mount/resize so the store shape — and any future 3D-mode revival —
+ * stays intact.
  */
 export const guideBandPos = {
   /** Hook point (top-centre of the medallion), screen px. */
