@@ -364,7 +364,7 @@ export const SECTIONS: SectionConfig[] = [
     id: 'projects',
     label: 'Projects',
     animation: 'point',
-    bubbleText: "This is my Projects section. Here are things I've built. Click any card to see details!",
+    bubbleText: "This is his Projects section — here are the things he's built. Click any card to see details!",
     mobileBubbleText: "Projects! Click any card to see details!",
     hangDepth: 0.52,
   },

@@ -108,7 +108,9 @@ export const PROJECTS: Project[] = [
       'HomeSplit splits shared-house shopping and expenses with exact integer-paisa maths — no floating-point rounding errors, ever. It has smart settlement suggestions, payment-request confirmations for JazzCash/Easypaisa/Bank, receipt upload with a verify/dispute audit trail, and real auth (email + PIN sessions and Google sign-in). Built from scratch — Flutter app plus a zero-dependency Node API — inside a 5-hour hackathon window.',
     tech: ['Flutter', 'Dart', 'Node.js', 'REST API'],
     liveUrl: 'https://umararif4472-arch.github.io/homesplit-web/',
-    codeUrl: 'https://github.com/umararif4472-arch/HomeSplit',
+    // No codeUrl on purpose: the HomeSplit repo is PRIVATE, so a public
+    // "Source code" button would 404 for every visitor. The live demo
+    // link above is the public way in.
     gradient: ['#123c33', '#7fb069'],
     coverLabel: 'HS',
   },
@@ -138,7 +140,8 @@ export const PROJECTS: Project[] = [
     description:
       'PatternLab is my testing ground for professional Flutter architecture: feature-first clean architecture, Riverpod code generation next to Bloc/Cubit, Dio interceptors, an offline-first cache, and a Firebase-ready auth seam. Verified with static analysis and tests — it is where I prove patterns before they go into real products.',
     tech: ['Flutter', 'Dart', 'Riverpod', 'Bloc'],
-    codeUrl: 'https://github.com/umararif4472-arch/pattern-lab',
+    // No codeUrl on purpose: the pattern-lab repo is PRIVATE, so a public
+    // "Source code" button would 404 for every visitor.
     gradient: ['#2a2140', '#8f7ff5'],
     coverLabel: 'PL',
   },

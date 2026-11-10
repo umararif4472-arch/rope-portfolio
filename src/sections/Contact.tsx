@@ -137,7 +137,7 @@ export default function Contact() {
         <footer className="mt-24 border-t border-white/10 pt-8 pb-4 text-center text-sm text-white/50">
           <p>
             © {new Date().getFullYear()} {SITE.name} · {SITE.location} · Built
-            with React, Three.js and one very brave rope. 🪢
+            with React, TypeScript and one very brave rope. 🪢
           </p>
         </footer>
       </div>

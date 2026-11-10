@@ -23,8 +23,16 @@ export default function Navbar() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-[#071512]/80 backdrop-blur-md">
+      {/* The right padding is NOT decoration — it reserves the stuck
+          guide's strip. His static rope hangs at a fixed x near the right
+          edge (mobile: viewport −66…−62px; ≥768px: −98…−94px) and crosses
+          the navbar band. The padding keeps every link/button ending at
+          least ~10px LEFT of the rope at every width, without ever
+          moving the guide: pr-76 on mobile (66 + 10 clearance), pr-108
+          from md up (98 + 10). At ≥1400px the centred max-w-6xl column
+          already ends well left of the rope, so plain pr-5 returns. */}
       <nav
-        className="mx-auto flex h-[64px] max-w-6xl items-center justify-between px-4 sm:px-5"
+        className="mx-auto flex h-[64px] max-w-6xl items-center justify-between pl-4 pr-[76px] sm:pl-5 md:pr-[108px] min-[1400px]:pr-5"
         aria-label="Main navigation"
       >
         <button
@@ -32,10 +40,13 @@ export default function Navbar() {
           className="flex shrink-0 items-center gap-2.5 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B]"
           aria-label={`${SITE.name} — back to top`}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D99A2B] text-sm font-black text-[#071512]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D99A2B] text-sm font-black text-[#071512]">
             {SITE.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
           </span>
-          <span className="hidden font-bold tracking-tight text-white sm:block">
+          {/* Name waits for lg: at md widths the links row needs the room
+              next to the reserved rope strip (and the name used to wrap
+              to two lines at 768px, stretching this button to 59px). */}
+          <span className="hidden font-bold tracking-tight text-white lg:block">
             {SITE.name}
           </span>
         </button>
@@ -57,7 +68,7 @@ export default function Navbar() {
               <button
                 onClick={() => go(s.id)}
                 aria-current={currentSection === s.id ? 'true' : undefined}
-                className={`rounded-full px-2 py-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B] sm:px-3 sm:py-2 sm:text-sm ${
+                className={`rounded-full px-2 py-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D99A2B] sm:px-2 sm:py-2.5 sm:text-sm lg:px-3 ${
                   currentSection === s.id
                     ? 'bg-[#D99A2B]/15 text-[#D99A2B]'
                     : 'text-white/70 hover:text-white'
@@ -72,7 +83,7 @@ export default function Navbar() {
               href={CONTACT.github}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-[#D99A2B] px-4 py-2 text-sm font-semibold text-[#071512] transition hover:bg-[#e8ab3d] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="rounded-full bg-[#D99A2B] px-4 py-2.5 text-sm font-semibold text-[#071512] transition hover:bg-[#e8ab3d] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               GitHub ↗
             </a>
