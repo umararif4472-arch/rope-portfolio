@@ -18,13 +18,14 @@ import Lenis from 'lenis';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useProgress } from '@react-three/drei';
-import { BUBBLE, SECTIONS, WELCOME_TEXT } from './config/character';
+import { BUBBLE, CHARACTER, SECTIONS, WELCOME_TEXT } from './config/character';
 import { useStore, isMobileNow, prefersReducedMotion } from './store/useStore';
 import { lenisRef } from './hooks/lenisRef';
 import { useGuideDirector } from './hooks/useGuideDirector';
 import Navbar from './components/Navbar';
 import LoadingScreen from './components/LoadingScreen';
 import SpeechBubble from './components/SpeechBubble';
+import GuideMedallion from './components/GuideMedallion';
 import FallbackGuide from './components/FallbackGuide';
 import Scene from './three/Scene';
 import Hero from './sections/Hero';
@@ -179,6 +180,10 @@ export default function App() {
       {webgl ? (
         <>
           <Scene />
+          {/* Fix pass 3: with the image guide on, the visible character is
+              Umar's real avatar medallion hanging on the rope's end
+              (the 3D rope still renders inside <Scene/>). */}
+          {CHARACTER.useImageGuide && <GuideMedallion />}
           <SpeechBubble />
         </>
       ) : (

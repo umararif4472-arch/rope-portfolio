@@ -14,12 +14,14 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { BUBBLE } from '../config/character';
-import { useStore, characterScreenPos } from '../store/useStore';
+import { useStore, characterScreenPos, guideScreenPos } from '../store/useStore';
 
 export default function SpeechBubble() {
   const bubbleText = useStore((s) => s.bubbleText);
   const bubbleVisible = useStore((s) => s.bubbleVisible);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const tailRef = useRef<HTMLSpanElement>(null);
+  const tailMode = useRef<'side' | 'below'>('side');
   const [typed, setTyped] = useState('');
 
   // ---- typewriter ----------------------------------------------------------
@@ -44,19 +46,49 @@ export default function SpeechBubble() {
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const el = wrapRef.current;
-      if (!el || !characterScreenPos.ready) return;
+      if (!el || (!characterScreenPos.ready && !guideScreenPos.ready)) return;
       const bubbleW = el.offsetWidth || 260;
       const bubbleH = el.offsetHeight || 80;
-      // Sit to the LEFT of the character (he hangs on the right side),
-      // roughly at his head height.
-      let x = characterScreenPos.x - bubbleW - 18;
-      let y = characterScreenPos.y - bubbleH - 10;
-      // On narrow screens there is no room on the left — go above-left instead.
-      if (x < 10) x = Math.max(10, characterScreenPos.x - bubbleW + 40);
+      let x: number;
+      let y: number;
+      let mode: 'side' | 'below' = 'side';
+      if (guideScreenPos.ready) {
+        // IMAGE GUIDE (fix pass 3): sit to the LEFT of the medallion,
+        // vertically centred on it. guideScreenPos is his final CLAMPED
+        // geometry, so the bubble tracks the medallion he actually sees.
+        x = guideScreenPos.centerX - guideScreenPos.sizePx / 2 - bubbleW - 14;
+        y = guideScreenPos.centerY - bubbleH / 2;
+        if (x < 10) {
+          // No room on his left (phones): sit BELOW him, never over him.
+          mode = 'below';
+          x = Math.max(10, guideScreenPos.centerX - bubbleW + 70);
+          y = guideScreenPos.centerY + guideScreenPos.sizePx / 2 + 12;
+        }
+      } else {
+        // 3D character: sit to his LEFT, roughly at head height.
+        x = characterScreenPos.x - bubbleW - 18;
+        y = characterScreenPos.y - bubbleH - 10;
+        // On narrow screens there is no room on the left — go above-left instead.
+        if (x < 10) x = Math.max(10, characterScreenPos.x - bubbleW + 40);
+      }
       // Clamp inside the viewport.
       x = Math.min(Math.max(10, x), window.innerWidth - bubbleW - 10);
       y = Math.min(Math.max(70, y), window.innerHeight - bubbleH - 10);
       el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      // Point the little tail at him: right side normally, top when below.
+      if (tailRef.current && tailMode.current !== mode) {
+        tailMode.current = mode;
+        const tail = tailRef.current;
+        if (mode === 'below') {
+          tail.style.right = '42px';
+          tail.style.top = '-7px';
+          tail.style.transform = 'rotate(45deg)';
+        } else {
+          tail.style.right = '-7px';
+          tail.style.top = '50%';
+          tail.style.transform = 'translateY(-50%) rotate(45deg)';
+        }
+      }
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -77,9 +109,13 @@ export default function SpeechBubble() {
         role="status"
       >
         {typed || bubbleText}
-        {/* little tail pointing right, toward the character */}
+        {/* little tail pointing at the character (repositioned by the
+            follow loop: right side normally, top when the bubble sits
+            below the medallion on narrow screens) */}
         <span
-          className="absolute right-[-7px] top-1/2 h-4 w-4 -translate-y-1/2 rotate-45 rounded-[3px] bg-white"
+          ref={tailRef}
+          className="absolute h-4 w-4 rounded-[3px] bg-white"
+          style={{ right: '-7px', top: '50%', transform: 'translateY(-50%) rotate(45deg)' }}
           aria-hidden="true"
         />
       </div>

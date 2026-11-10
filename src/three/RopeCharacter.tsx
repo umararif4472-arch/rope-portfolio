@@ -25,7 +25,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { FOLLOW, ROPE, SECTIONS } from '../config/character';
+import { CHARACTER, FOLLOW, ROPE, SECTIONS } from '../config/character';
 import { useStore, characterScreenPos, isMobileNow, prefersReducedMotion } from '../store/useStore';
 import { RopeSim } from './RopeSim';
 import CharacterModel from './CharacterModel';
@@ -167,10 +167,13 @@ export default function RopeCharacter() {
     // anchor mount (little ceiling hook) follows viewport resizes
     mountRef.current.position.copy(anchor);
 
-    // -- 5. publish screen position for the speech bubble -----------------------
+    // -- 5. publish screen position for the bubble + image medallion -----------
     tmp.copy(end);
     tmp.x = anchor.x + sim.swayOffsetX; // same locked X the character uses
-    tmp.y -= 0.5 * scale; // approx. his head
+    // Image guide (fix pass 3): the DOM medallion's hook must sit EXACTLY
+    // on the rope's end point, so publish the end point untouched.
+    // 3D character: his head is a bit below the grip point — offset to it.
+    if (!CHARACTER.useImageGuide) tmp.y -= 0.5 * scale;
     tmp.project(camera);
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -200,9 +203,15 @@ export default function RopeCharacter() {
         <meshStandardMaterial color={ROPE.color} roughness={0.55} />
       </mesh>
 
-      {/* the character, attached to the rope's last point */}
+      {/* The character mount point on the rope's last point.
+          Fix pass 3: while CHARACTER.useImageGuide is on, the visible
+          character is the DOM medallion (GuideMedallion.tsx) hanging on
+          this exact point — the 3D character (procedural shapes or your
+          future model.glb via CharacterModel) is NOT mounted, so its
+          code path stays dormant but intact. Flip the config flag to
+          bring the 3D character back. */}
       <group ref={charRef}>
-        <CharacterModel />
+        {CHARACTER.useImageGuide ? null : <CharacterModel />}
       </group>
     </group>
   );

@@ -102,6 +102,24 @@ You don't need to model anything from scratch:
 - **Bubble:** a DOM overlay (not drei Html) moved by direct style transforms
   from the character's projected screen position — crisp text, aria-live
   for screen readers, no React re-renders at 60 fps.
+- **The face you see (fix pass 3):** the visible guide is Umar's *actual*
+  3D-avatar render (`public/guide-fallback.webp`) in a gold-ringed round
+  medallion (`GuideMedallion.tsx`) that hangs from the rope's end point —
+  exact likeness, because it is his real picture. Moods become small
+  medallion dances (gentle sway, greeting wiggle/dip, scared shake). It is
+  a picture, not a rigged 3D model: set `CHARACTER.useImageGuide = false`
+  in `src/config/character.ts` to switch back to the 3D character
+  (procedural shapes, or your own `model.glb` — that code path is kept,
+  dormant, and takes over automatically when the file exists and the
+  flag is off).
+- **Always on screen — guaranteed:** every frame, the medallion's hook
+  position is hard-clamped so the whole medallion (metal ring included)
+  stays at least `CHARACTER.edgeMarginPx` (8 px) inside the viewport on
+  all four sides — during section glides, fast scrolling and the scared
+  shake alike. While clamped he waits at the edge, fully visible, until
+  the section target comes back into range (the rope length adjusts via
+  the follow spring), and a small SVG segment in the overlay bridges any
+  gap between the 3D rope's end and his hook so he always looks attached.
 
 ## Performance & accessibility notes
 

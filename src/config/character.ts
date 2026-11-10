@@ -41,6 +41,47 @@ export const CLIPS = {
 
 export type Mood = keyof typeof CLIPS;
 
+/**
+ * ---------------------------------------------------------------------------
+ *  WHICH CHARACTER DOES THE VISITOR SEE?
+ * ---------------------------------------------------------------------------
+ *  `useImageGuide: true` (the current live behaviour, fix pass 3):
+ *  the visible guide is Umar's ACTUAL 3D-avatar render
+ *  (public/guide-fallback.webp) shown as a round medallion that hangs from
+ *  the end of the 3D rope — exact likeness, because it IS his picture.
+ *  The moods become small medallion dances (sway / wiggle / dip / shake)
+ *  instead of 3D-model animations, and his position is hard-clamped so he
+ *  can NEVER leave the screen (see GuideMedallion.tsx).
+ *
+ *  Set it to `false` to go back to the 3D character (the procedural
+ *  shapes character, or your real rigged model when public/model.glb
+ *  exists — that code path stays in the codebase, just dormant).
+ */
+export const CHARACTER = {
+  useImageGuide: true,
+  /** His avatar render, relative to the site base (public/ folder). */
+  imageFile: 'guide-fallback.webp',
+  /** Medallion diameter in px — desktop / mobile. */
+  sizeDesktopPx: 160,
+  sizeMobilePx: 104,
+  /** Diameter of the little metal ring at the top the rope attaches to. */
+  hookSizePx: 18,
+  /**
+   * ALWAYS-ON-SCREEN guarantee: the medallion (hook included) is clamped
+   * every frame so it stays at least this many px inside the viewport on
+   * every side — during section changes, fast scrolling and the scared
+   * shake alike. While clamped he waits at the edge, fully visible.
+   */
+  edgeMarginPx: 8,
+  /**
+   * Where his face sits inside the square crop of the portrait
+   * (CSS object-position). The render is a tall portrait with his face +
+   * sunglasses + polo in the top-centre, so a small % keeps the crop
+   * centred on his face instead of his chest.
+   */
+  imagePosition: '50% 6%',
+};
+
 // ---------------------------------------------------------------------------
 // Rope + follow behaviour
 // ---------------------------------------------------------------------------

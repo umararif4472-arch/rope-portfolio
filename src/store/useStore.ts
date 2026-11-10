@@ -85,6 +85,23 @@ export const characterScreenPos = {
   ready: false,
 };
 
+/**
+ * Shared mutable object holding the IMAGE GUIDE medallion's final,
+ * hard-clamped on-screen geometry (written every frame by
+ * GuideMedallion.tsx after the always-on-screen clamp is applied).
+ * The speech bubble follows THIS when the image guide is active, so it
+ * always sits beside the medallion the visitor actually sees — even
+ * while he is clamped at a viewport edge, waiting.
+ */
+export const guideScreenPos = {
+  /** Centre of the medallion circle, in px. */
+  centerX: 0,
+  centerY: 0,
+  /** Medallion diameter in px (so followers can offset by his real size). */
+  sizePx: 0,
+  ready: false,
+};
+
 /** True when the visitor asked their OS for reduced motion. */
 export const prefersReducedMotion =
   typeof window !== 'undefined' &&
