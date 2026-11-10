@@ -102,6 +102,22 @@ export const guideScreenPos = {
   ready: false,
 };
 
+/**
+ * Shared mutable object written every frame by GuideMedallion.tsx
+ * (fix pass 4): the medallion's FINAL, safe-band-clamped hook position
+ * in screen px. The 3D rope reads this and drives its target length
+ * from it, so the rope follows the medallion — the medallion no longer
+ * depends on the rope's physics to be visible.
+ */
+export const guideBandPos = {
+  /** Hook point (top-centre of the medallion), screen px. */
+  hookX: 0,
+  hookY: 0,
+  /** The unclamped right-side anchor x (screen px) the rope hangs from. */
+  anchorX: 0,
+  ready: false,
+};
+
 /** True when the visitor asked their OS for reduced motion. */
 export const prefersReducedMotion =
   typeof window !== 'undefined' &&

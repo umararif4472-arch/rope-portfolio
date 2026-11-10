@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CHARACTER, FOLLOW, ROPE, SECTIONS } from '../config/character';
-import { useStore, characterScreenPos, isMobileNow, prefersReducedMotion } from '../store/useStore';
+import { useStore, characterScreenPos, guideBandPos, isMobileNow, prefersReducedMotion } from '../store/useStore';
 import { RopeSim } from './RopeSim';
 import CharacterModel from './CharacterModel';
 
@@ -88,8 +88,21 @@ export default function RopeCharacter() {
     const section = SECTIONS.find((s) => s.id === store.currentSection) ?? SECTIONS[0];
     const anchor = anchorFor(mobile);
     sim.setAnchor(anchor);
-    const targetCharY = viewport.height / 2 - section.hangDepth * viewport.height;
-    const desiredLength = Math.max(0.6, anchor.y - targetCharY);
+    // Fix pass 4 (image guide): the MEDALLION owns the visible position
+    // (DOM safe band — see GuideMedallion.tsx) and the rope now follows
+    // IT: drive the target length from the medallion's clamped hook Y so
+    // the rope's end lands on the hook. (Screen px → world Y: the canvas
+    // is full-screen, so worldY = (0.5 − hookY/vh) × viewport.height.)
+    // The 3D-character mode keeps the original section hangDepth target.
+    let desiredLength: number;
+    if (CHARACTER.useImageGuide && guideBandPos.ready) {
+      const hookWorldY =
+        (0.5 - guideBandPos.hookY / window.innerHeight) * viewport.height;
+      desiredLength = Math.max(0.6, anchor.y - hookWorldY);
+    } else {
+      const targetCharY = viewport.height / 2 - section.hangDepth * viewport.height;
+      desiredLength = Math.max(0.6, anchor.y - targetCharY);
+    }
 
     if (!store.isFastScrolling) {
       // Smooth the target itself first (exponential low-pass) so section

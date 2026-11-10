@@ -1,55 +1,64 @@
 /**
- * GuideMedallion — the visible guide since fix pass 3: Umar's REAL avatar.
+ * GuideMedallion — the visible guide: Umar's REAL avatar (fix pass 3),
+ * repositioned on a GUARANTEED SAFE BAND (fix pass 4).
  *
- * Umar's verdict on the shape-built 3D character was "that's not my 3d
- * model" — and he was right: primitives can echo a person, never BE him.
- * So the visible character is now his actual 3D-avatar render
- * (public/guide-fallback.webp) in a round, gold-ringed medallion. It is
- * his real picture — exact likeness — presented as the hanging guide.
- * (It is still a picture, not a rigged 3D model: the model.glb code path
- * in CharacterModel.tsx remains for the day he drops one in, and
- * CHARACTER.useImageGuide in config switches back to it.)
- *
- * How it hangs: the 3D layer keeps simulating the calm, X-locked rope and
- * publishes the rope's END point every frame to `characterScreenPos`
- * (screen px). This component reads that point each frame and:
- *   1. adds the current mood's little dance (sway / wiggle / dip / shake),
- *   2. HARD-CLAMPS the result so the whole medallion + hook is always
- *      fully inside the viewport (see the clamp rule below),
- *   3. moves the DOM node with a direct transform — no React re-renders.
- * If the clamp ever holds him away from the rope's true end (e.g. the
- * rope wants to dip below the bottom edge), an SVG segment in this same
- * overlay bridges rope-end → hook, so the rope always looks attached.
+ * Why pass 4 exists: in pass 3 the medallion inherited its position from
+ * the 3D rope's projected end point. On the hero that point starts at the
+ * very top of the viewport, and the old clamp only kept an 8px margin —
+ * so the medallion slid BEHIND the fixed navbar (~65px tall) and was
+ * effectively invisible in Umar's phone screenshots. The files served
+ * fine; the failure was purely positional.
  *
  * ==========================================================================
- *  THE ALWAYS-ON-SCREEN CLAMP (why he can NEVER leave the screen again)
+ *  THE SAFE BAND — he can NEVER hide behind the navbar or leave the screen
  * ==========================================================================
- *  Every frame, before the transform is applied, the hook position is
- *  clamped so that:
- *      hookX ∈ [ margin + size/2 ,  vw − margin − size/2 ]
- *      hookY ∈ [ margin + ringR ,  vh − margin − circleGap − size ]
- *  i.e. the circle's left/right edges and the ring's top / circle's
- *  bottom always stay ≥ CHARACTER.edgeMarginPx (8px) inside the
- *  viewport — during section glides, fast scrolling and the scared
- *  shake alike. While clamped, he simply waits at the edge, fully
- *  visible, until the section target comes back into range; the rope
- *  length in the 3D layer adjusts on its own via the follow spring.
+ *  His position is now computed HERE, in the DOM layer, from explicit
+ *  pixel bounds — fully independent of the rope simulation:
+ *
+ *      navH      = the real navbar height, measured at runtime from the
+ *                  <header> element (offsetHeight), fallback 76px
+ *      boxTop    ∈ [ navH + 10 ,  vh − 14 − boxHeight ]
+ *      boxLeft   ∈ [ 8 ,  vw − 8 − size ]
+ *
+ *  Both ranges are then shrunk by CHARACTER.bandSafetyPx (6px) on every
+ *  side, and the FINAL transform values are clamped into the shrunk
+ *  ranges every frame. Mood dances are ROTATIONS around the top hook
+ *  applied after clamping (plus a ≤3% scale bounce); the safety margin
+ *  absorbs the few px a rotating corner can swing.
+ *
+ *  Within the band he still travels: the active section's index maps to
+ *  a fraction of the band (hero = top of band … contact = bottom), and
+ *  a critically-damped px spring glides him there with a hard speed
+ *  cap. While the visitor scrolls too fast the target freezes — he lags
+ *  behind, exactly like before, but always inside the band.
+ *
+ *  The rope still connects: this component publishes the clamped hook
+ *  position to `guideBandPos` every frame; the 3D layer drives its rope
+ *  length from it (see RopeCharacter.tsx), and the SVG bridge in this
+ *  overlay draws any residual segment between the rope's end and the
+ *  hook, so a visible disconnect cannot happen.
  */
 import { useEffect, useRef } from 'react';
-import { CHARACTER, ROPE } from '../config/character';
+import { CHARACTER, FOLLOW, ROPE, SECTIONS } from '../config/character';
 import { SITE } from '../config/site';
-import { useStore, characterScreenPos, guideScreenPos, prefersReducedMotion } from '../store/useStore';
+import {
+  useStore,
+  characterScreenPos,
+  guideBandPos,
+  guideScreenPos,
+  prefersReducedMotion,
+} from '../store/useStore';
 
-/** Vertical gap between the hook point and the top of the circle (px). */
-const CIRCLE_GAP_PX = 6;
+/** Distance from the top of the medallion box to the circle's top edge. */
+const CIRCLE_TOP_PX = 12;
 
-const clampRange = (v: number, lo: number, hi: number) =>
+const clamp = (v: number, lo: number, hi: number) =>
   hi < lo ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi);
 
 export default function GuideMedallion() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const swingRef = useRef<HTMLDivElement>(null);
-  const circleRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<SVGLineElement>(null);
 
   useEffect(() => {
@@ -57,94 +66,169 @@ export default function GuideMedallion() {
     let lastMood = '';
     let moodSince = 0;
     let lastSize = 0;
+    // Glide state (px space — kept in refs, never React state).
+    let curX: number | null = null;
+    let curY: number | null = null;
+    let velX = 0;
+    let velY = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let hasTarget = false;
+    // Navbar height, re-measured a few times a second (cheap + resize-safe).
+    let navH = CHARACTER.navFallbackPx;
+    let navMeasuredAt = 0;
+    let lastTime = performance.now();
 
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const wrap = wrapRef.current;
-      if (!wrap) return;
-      if (!characterScreenPos.ready) {
-        wrap.style.opacity = '0';
-        return;
-      }
+      const box = boxRef.current;
+      if (!wrap || !box) return;
+
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 1 / 20);
+      lastTime = now;
+      const t = now / 1000;
+
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const size = vw < 768 ? CHARACTER.sizeMobilePx : CHARACTER.sizeDesktopPx;
-      const margin = CHARACTER.edgeMarginPx;
-      const ringR = CHARACTER.hookSizePx / 2;
-      const t = performance.now() / 1000;
-      const mood = useStore.getState().mood;
+      const mobile = vw < 768;
+      const size = mobile ? CHARACTER.sizeMobilePx : CHARACTER.sizeDesktopPx;
+      const boxW = size;
+      const boxH = CIRCLE_TOP_PX + size;
+      const safety = CHARACTER.bandSafetyPx;
+
+      // ---- measure the REAL navbar (its height is the band's ceiling) ----
+      if (now - navMeasuredAt > 300) {
+        navMeasuredAt = now;
+        const header = document.querySelector('header');
+        const h = header?.offsetHeight ?? 0;
+        navH = h > 0 ? h : CHARACTER.navFallbackPx;
+      }
+
+      // ---- THE SAFE BAND (explicit px bounds, shrunk by the safety px) ---
+      const minLeft = CHARACTER.edgeMarginPx + safety;
+      const maxLeft = vw - CHARACTER.edgeMarginPx - safety - boxW;
+      const minTop = navH + CHARACTER.bandTopGapPx + safety;
+      const maxTop = vh - CHARACTER.bandBottomGapPx - safety - boxH;
+
+      // ---- target: right-side x + section fraction down the band ---------
+      const store = useStore.getState();
+      const fracX = mobile
+        ? FOLLOW.anchorRightFractionMobile
+        : FOLLOW.anchorRightFractionDesktop;
+      const anchorX = vw * (1 - fracX);
+      if (!store.isFastScrolling) {
+        // While fast-scrolling he lags: the target simply doesn't move.
+        const idx = Math.max(
+          0,
+          SECTIONS.findIndex((s) => s.id === store.currentSection),
+        );
+        const frac = SECTIONS.length > 1 ? idx / (SECTIONS.length - 1) : 0;
+        targetX = clamp(anchorX - boxW / 2, minLeft, maxLeft);
+        targetY = clamp(minTop + frac * (maxTop - minTop), minTop, maxTop);
+        hasTarget = true;
+      }
+
+      // ---- first frame: appear AT the target (visible below the navbar
+      //      immediately — no waiting on the rope sim, no drop from y=0) --
+      if (curX === null || curY === null) {
+        curX = targetX;
+        curY = targetY;
+      }
+
+      // ---- calm glide: critically-damped px spring + hard speed cap ------
+      if (hasTarget) {
+        const maxSpeed = mobile
+          ? CHARACTER.glideMaxSpeedMobilePx
+          : CHARACTER.glideMaxSpeedDesktopPx;
+        const ax =
+          CHARACTER.glideStiffness * (targetX - curX) - CHARACTER.glideDamping * velX;
+        const ay =
+          CHARACTER.glideStiffness * (targetY - curY) - CHARACTER.glideDamping * velY;
+        velX = clamp(velX + ax * dt, -maxSpeed, maxSpeed);
+        velY = clamp(velY + ay * dt, -maxSpeed, maxSpeed);
+        curX += velX * dt;
+        curY += velY * dt;
+      }
+
+      // ---- FINAL CLAMP: the values written to the transform are clamped --
+      const finalX = clamp(curX, minLeft, maxLeft);
+      const finalY = clamp(curY, minTop, maxTop);
+      // Keep the integrator honest while clamped at an edge.
+      curX = finalX;
+      curY = finalY;
+
+      // ---- mood dances: ROTATIONS ONLY (applied after the clamp; the
+      //      safety margin absorbs the few px a rotating corner swings) ---
+      const mood = store.mood;
       if (mood !== lastMood) {
         lastMood = mood;
         moodSince = t;
       }
       const moodAge = t - moodSince;
-
-      // ---- mood dance (translations are added BEFORE the clamp, so even
-      //      the scared shake can never push him off screen) ---------------
-      let shakeX = 0;
-      let shakeY = 0;
       let rot = 0;
+      let scale = 1;
       if (!prefersReducedMotion) {
         if (mood === 'scared') {
-          // Rapid small shake bursts (~0.5 s feel, lasts while mood=scared).
-          shakeX = Math.sin(t * 47) * 3;
-          shakeY = Math.cos(t * 39) * 2;
-          rot = Math.sin(t * 30) * 2;
+          rot = Math.sin(t * 30) * 2.5; // rapid little shake, in place
         } else if (mood === 'swing') {
-          // Being dragged by a fast scroll — a wider, slower sway.
-          rot = Math.sin(t * 3.2) * 3;
+          rot = Math.sin(t * 3.2) * 3; // dragged-by-fast-scroll sway
         } else if (
           (mood === 'wave' || mood === 'nod' || mood === 'point' || mood === 'thumbsUp') &&
           moodAge < 0.9
         ) {
-          // One-shot greeting gestures, played once when the mood arrives.
           const env = Math.sin(Math.min(moodAge / 0.9, 1) * Math.PI); // 0→1→0
           if (mood === 'wave') {
             rot = Math.sin(moodAge * 16) * 4 * env; // friendly wiggles
           } else {
-            shakeY = 7 * env; // happy dip / bounce
+            scale = 1 + 0.03 * env; // happy dip, as a tiny bounce
             rot = Math.sin(moodAge * 10) * 1.5 * env;
           }
         } else {
-          // Idle (and the resting state after any one-shot): barely-there sway.
-          rot = Math.sin(t * 0.9) * 1.2;
+          rot = Math.sin(t * 0.9) * 1.2; // idle micro-sway
         }
       }
 
-      // ---- THE CLAMP: hook position, hard-limited every frame -------------
-      const rawX = characterScreenPos.x;
-      const rawY = characterScreenPos.y;
-      const hookX = clampRange(
-        rawX + shakeX,
-        margin + size / 2,
-        vw - margin - size / 2,
-      );
-      const hookY = clampRange(
-        rawY + shakeY,
-        margin + ringR,
-        vh - margin - CIRCLE_GAP_PX - size,
-      );
-
       // ---- apply transforms directly (no React re-render) -----------------
       wrap.style.opacity = '1';
-      wrap.style.transform = `translate3d(${hookX}px, ${hookY}px, 0)`;
+      wrap.style.transform = `translate3d(${finalX}px, ${finalY}px, 0)`;
       if (swingRef.current) {
-        swingRef.current.style.transform = `rotate(${rot}deg)`;
+        swingRef.current.style.transform = `rotate(${rot}deg) scale(${scale})`;
       }
-      if (circleRef.current && size !== lastSize) {
+      if (size !== lastSize) {
         lastSize = size;
-        circleRef.current.style.width = `${size}px`;
-        circleRef.current.style.height = `${size}px`;
+        box.style.width = `${boxW}px`;
+        box.style.height = `${boxH}px`;
+        if (swingRef.current) {
+          swingRef.current.style.width = `${boxW}px`;
+          swingRef.current.style.height = `${boxH}px`;
+        }
       }
 
-      // ---- bridge segment: rope end → hook, only while clamped apart ----
+      // ---- publish final geometry -----------------------------------------
+      const hookX = finalX + boxW / 2;
+      const hookY = finalY + CHARACTER.hookSizePx / 2;
+      guideBandPos.hookX = hookX;
+      guideBandPos.hookY = hookY;
+      guideBandPos.anchorX = anchorX;
+      guideBandPos.ready = true;
+      guideScreenPos.centerX = hookX;
+      guideScreenPos.centerY = finalY + CIRCLE_TOP_PX + size / 2;
+      guideScreenPos.sizePx = size;
+      guideScreenPos.ready = true;
+
+      // ---- bridge: always a drawn line from the rope to the hook ---------
       const line = lineRef.current;
       if (line) {
-        const dx = hookX - rawX;
-        const dy = hookY - rawY;
-        if (dx * dx + dy * dy > 2.25) {
-          line.setAttribute('x1', `${rawX}`);
-          line.setAttribute('y1', `${rawY}`);
+        // Prefer the real rope end; fall back to the top anchor point.
+        const fromX = characterScreenPos.ready ? characterScreenPos.x : anchorX;
+        const fromY = characterScreenPos.ready ? characterScreenPos.y : 0;
+        const dx = hookX - fromX;
+        const dy = hookY - fromY;
+        if (dx * dx + dy * dy > 4) {
+          line.setAttribute('x1', `${fromX}`);
+          line.setAttribute('y1', `${fromY}`);
           line.setAttribute('x2', `${hookX}`);
           line.setAttribute('y2', `${hookY}`);
           line.style.opacity = '1';
@@ -152,24 +236,19 @@ export default function GuideMedallion() {
           line.style.opacity = '0';
         }
       }
-
-      // ---- publish the final geometry for the speech bubble ---------------
-      guideScreenPos.centerX = hookX;
-      guideScreenPos.centerY = hookY + CIRCLE_GAP_PX + size / 2;
-      guideScreenPos.sizePx = size;
-      guideScreenPos.ready = true;
     };
 
     raf = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(raf);
+      guideBandPos.ready = false;
       guideScreenPos.ready = false;
     };
   }, []);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-40">
-      {/* bridge segment between the 3D rope's end and the clamped hook */}
+      {/* bridge segment between the 3D rope's end and the medallion hook */}
       <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
         <line
           ref={lineRef}
@@ -180,55 +259,70 @@ export default function GuideMedallion() {
         />
       </svg>
 
-      {/* the medallion, positioned by direct transform at the hook point */}
+      {/* The medallion BOX. The loop sets its transform to the final,
+          safe-band-clamped top-left corner — the whole box (hook ring +
+          circle) is guaranteed inside the band. */}
       <div
         ref={wrapRef}
         className="absolute left-0 top-0 opacity-0 transition-opacity duration-500 will-change-transform"
       >
-        {/* swing pivot: rotates around the hook point (transform-origin 0 0) */}
+        {/* swing pivot: rotates around the hook point (top-centre) */}
         <div
           ref={swingRef}
           className="absolute left-0 top-0 will-change-transform"
-          style={{ transformOrigin: '0 0' }}
+          style={{
+            width: CHARACTER.sizeDesktopPx,
+            height: CIRCLE_TOP_PX + CHARACTER.sizeDesktopPx,
+            transformOrigin: `50% ${CHARACTER.hookSizePx / 2}px`,
+          }}
         >
           <div
-            ref={circleRef}
-            className="absolute left-0 top-0 rounded-full"
+            ref={boxRef}
+            className="relative"
             style={{
               width: CHARACTER.sizeDesktopPx,
-              height: CHARACTER.sizeDesktopPx,
-              transform: `translate(-50%, ${CIRCLE_GAP_PX}px)`,
-              overflow: 'hidden',
-              background: '#0d2420',
-              border: '4px solid #D99A2B', // gold ring (accent)
-              boxShadow: '0 22px 50px rgba(0,0,0,0.55)',
+              height: CIRCLE_TOP_PX + CHARACTER.sizeDesktopPx,
             }}
           >
-            <img
-              src={`${import.meta.env.BASE_URL}${CHARACTER.imageFile}`}
-              alt={`3D avatar of ${SITE.name}, your guide`}
-              className="h-full w-full object-cover"
-              style={{ objectPosition: CHARACTER.imagePosition }}
-              draggable={false}
+            {/* the portrait circle */}
+            <div
+              className="absolute left-0 rounded-full"
+              style={{
+                top: CIRCLE_TOP_PX,
+                width: '100%',
+                aspectRatio: '1 / 1',
+                overflow: 'hidden',
+                background: '#0d2420',
+                border: '4px solid #D99A2B', // gold ring (accent)
+                boxShadow: '0 22px 50px rgba(0,0,0,0.55)',
+              }}
+            >
+              <img
+                src={`${import.meta.env.BASE_URL}${CHARACTER.imageFile}`}
+                alt={`3D avatar of ${SITE.name}, your guide`}
+                className="h-full w-full object-cover"
+                style={{ objectPosition: CHARACTER.imagePosition }}
+                draggable={false}
+              />
+            </div>
+
+            {/* the little metal ring the rope visually attaches to */}
+            <div
+              className="absolute rounded-full"
+              style={{
+                width: CHARACTER.hookSizePx,
+                height: CHARACTER.hookSizePx,
+                left: `calc(50% - ${CHARACTER.hookSizePx / 2}px)`,
+                top: 0,
+                background:
+                  'radial-gradient(circle at 35% 30%, #f4f7fa 0%, #aeb9c4 45%, #5f6b76 100%)',
+                boxShadow:
+                  'inset 0 0 0 3px rgba(38,45,52,0.85), 0 2px 6px rgba(0,0,0,0.45)',
+              }}
+              aria-hidden="true"
             />
           </div>
         </div>
-
-        {/* the little metal ring the rope visually attaches to — drawn last
-            so it sits on top of the circle's top edge */}
-        <div
-          className="absolute left-0 top-0 rounded-full"
-          style={{
-            width: CHARACTER.hookSizePx,
-            height: CHARACTER.hookSizePx,
-            transform: 'translate(-50%, -50%)',
-            background:
-              'radial-gradient(circle at 35% 30%, #f4f7fa 0%, #aeb9c4 45%, #5f6b76 100%)',
-            boxShadow:
-              'inset 0 0 0 3px rgba(38,45,52,0.85), 0 2px 6px rgba(0,0,0,0.45)',
-          }}
-          aria-hidden="true"
-        />
       </div>
     </div>
   );

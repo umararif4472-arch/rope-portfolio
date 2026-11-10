@@ -80,6 +80,44 @@ export const CHARACTER = {
    * centred on his face instead of his chest.
    */
   imagePosition: '50% 6%',
+  // -------------------------------------------------------------------------
+  //  SAFE BAND (fix pass 4) — the medallion can NEVER hide behind the navbar
+  // -------------------------------------------------------------------------
+  //  Pass 3 clamped him to an 8px margin from the viewport top, which let
+  //  him slide BEHIND the fixed navbar (~64px tall) and vanish. The
+  //  medallion's position is now computed in the DOM layer from EXPLICIT
+  //  pixel bounds (see GuideMedallion.tsx), independent of the rope sim:
+  //
+  //      boxTop    ∈ [ navH + bandTopGapPx ,  vh − bandBottomGapPx − boxH ]
+  //      boxLeft   ∈ [ edgeMarginPx ,  vw − edgeMarginPx − size ]
+  //
+  //  …then BOTH ranges are shrunk by bandSafetyPx on every side, and the
+  //  FINAL transform values are clamped into the shrunk ranges — so the
+  //  whole medallion (hook ring included) always stays below the navbar
+  //  and inside the viewport, mood rotations included.
+  /** Fallback navbar height (px) if it can't be measured at runtime. */
+  navFallbackPx: 76,
+  /** Clear space kept between the navbar's bottom edge and the medallion. */
+  bandTopGapPx: 10,
+  /** Clear space kept between the medallion and the viewport bottom. */
+  bandBottomGapPx: 14,
+  /**
+   * Extra shrink applied to the safe band on all sides (px). Mood dances
+   * are rotations around the top hook applied AFTER clamping; this margin
+   * absorbs the couple of px a rotating corner can swing.
+   */
+  bandSafetyPx: 6,
+  /**
+   * How he glides between band positions when the section changes:
+   * a critically-damped spring in px space (stiffness/damping) plus a
+   * hard speed cap, so travel is a calm glide — never a dart.
+   * stiffness 22 with damping ≈ 2×√22 ≈ 9.4 settles in about a second
+   * with no overshoot bounce.
+   */
+  glideStiffness: 22,
+  glideDamping: 9.4,
+  glideMaxSpeedDesktopPx: 300,
+  glideMaxSpeedMobilePx: 220,
 };
 
 // ---------------------------------------------------------------------------

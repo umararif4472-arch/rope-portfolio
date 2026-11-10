@@ -121,18 +121,45 @@ else {
 const site = `projects/${PROJECT}/sites/${siteId}`;
 
 // 2. Create a version ---------------------------------------------------------
+// Hosting config (rewrites + headers) is read from firebase.json and passed
+// through — same translation NeighborMart's script used (source → glob,
+// destination → path, header list → header map). This matters for caching:
+// firebase.json marks "/" AND "/index.html" as no-cache (a rule for
+// "/index.html" alone does NOT match requests to "/", which is how phones
+// kept serving a stale index/bundle), while hashed /assets stay immutable.
+let versionConfig = {
+  rewrites: [{ glob: '**', path: '/index.html' }],
+  headers: [
+    { glob: '/', headers: { 'Cache-Control': 'no-cache' } },
+    { glob: '/index.html', headers: { 'Cache-Control': 'no-cache' } },
+    {
+      glob: '**/*.@(js|css|webp|svg|glb)',
+      headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
+    },
+  ],
+};
+try {
+  const fj = JSON.parse(readFileSync('firebase.json', 'utf8'));
+  const hosting = fj.hosting ?? {};
+  if (Array.isArray(hosting.rewrites) && hosting.rewrites.length) {
+    versionConfig.rewrites = hosting.rewrites.map((r) => ({
+      glob: r.source,
+      path: r.destination,
+    }));
+  }
+  if (Array.isArray(hosting.headers) && hosting.headers.length) {
+    versionConfig.headers = hosting.headers.map((h) => ({
+      glob: h.source,
+      headers: Object.fromEntries(h.headers.map((x) => [x.key, x.value])),
+    }));
+  }
+  console.log('• Hosting config (rewrites + headers) read from firebase.json');
+} catch (e) {
+  console.log(`• firebase.json config not applied (${e.message}); using built-in defaults`);
+}
 const versionRes = await api(token, 'POST', `${API}/${site}/versions`, {
   status: 'CREATED',
-  config: {
-    rewrites: [{ glob: '**', path: '/index.html' }],
-    headers: [
-      { glob: '/index.html', headers: { 'Cache-Control': 'no-cache' } },
-      {
-        glob: '**/*.@(js|css|webp|svg|glb)',
-        headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
-      },
-    ],
-  },
+  config: versionConfig,
 });
 if (versionRes.status !== 200) {
   throw new Error(`Version creation failed: ${JSON.stringify(versionRes.json)}`);
