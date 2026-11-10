@@ -12,12 +12,18 @@ import { SITE } from './site';
 // The 3D model
 // ---------------------------------------------------------------------------
 /**
- * Path of YOUR rigged model. Drop the file at `public/model.glb` and it is
- * used automatically. While the file is missing (or fails to load) a cute
- * procedural character built from Three.js shapes takes over, so the site
- * never breaks.
+ * Path of YOUR rigged model (Umar's Avaturn avatar, optimized build).
+ * The file name is VERSIONED on purpose (`model-v2.glb`, next update
+ * `model-v3.glb`, …): firebase.json serves every `*.glb` with a
+ * one-year `immutable` cache header, so an updated model shipped under
+ * the SAME name would never reach phones that already downloaded the
+ * old one. The un-optimized source stays at `public/model.glb` as a
+ * backup but is no longer referenced here.
+ * While the file is missing (or fails to load) a cute procedural
+ * character built from Three.js shapes takes over, so the site never
+ * breaks.
  */
-export const MODEL_PATH = '/model.glb';
+export const MODEL_PATH = '/model-v2.glb';
 
 /** Draco decoder (lets compressed .glb files load). Hosted by Google. */
 export const DRACO_DECODER_PATH =
@@ -71,7 +77,7 @@ export const CHARACTER = {
   useImageGuide: true,
   /**
    * How the guide behaves:
-   *  - 'model3d' → the REAL 3D model (public/model.glb, Umar's Avaturn
+   *  - 'model3d' → the REAL 3D model (MODEL_PATH, Umar's Avaturn
    *               avatar) hangs from a frozen rope at the same fixed
    *               spot. Posed ONCE (arms up, gripping the rope) and
    *               rendered statically — frameloop="demand", no

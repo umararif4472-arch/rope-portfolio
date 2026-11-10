@@ -23,9 +23,12 @@
  * Failure handling: if the GLB cannot load (missing file, decode
  * error, no WebGL), an error boundary reports up via `onFail` and
  * App swaps in the GuideMedallion image guide — the site never
- * breaks. While the 13 MB file is still downloading, his avatar
- * image shows in the container as a placeholder (pure CSS, no store
- * publishing — this component is the only geometry publisher here).
+ * breaks. While the model file is still downloading, his avatar
+ * image shows in the container as a placeholder; the placeholder
+ * hides ONLY once every texture in the scene has actually decoded
+ * (see the readiness block below — a fixed timer was not enough on
+ * a slow phone). Pure CSS placeholder, no store publishing — this
+ * component is the only geometry publisher here.
  *
  * Bubble geometry: like GuideMedallion, this publishes his fixed
  * geometry to `guideScreenPos` on mount and on resize ONLY (his head
@@ -146,6 +149,54 @@ function poseHanging(scene: THREE.Object3D) {
 }
 
 // ---------------------------------------------------------------------------
+// Texture readiness — the placeholder may only hide once a REAL
+// textured frame can exist. The old logic hid it on a fixed 350 ms
+// timer and stopped invalidating after 2.2 s; on a slow phone the
+// GLB's textures were still decoding at that point, so the last
+// rendered frame could stick untextured (or the placeholder vanished
+// before the model was truly up) — the owner saw no model at all.
+// Now: collect every texture image in the scene and poll them. While
+// ANY texture is pending we keep invalidating every ~250 ms (the
+// scene is frozen — re-rendering the same static pose is invisible).
+// When the LAST texture completes we invalidate once more and only
+// then fire readiness. Safety valves: readiness fires anyway after
+// 10 s (never trap the placeholder), and polling stops at 20 s.
+// ---------------------------------------------------------------------------
+function collectTextureImages(scene: THREE.Object3D): unknown[] {
+  const images = new Set<unknown>();
+  scene.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        for (const value of Object.values(mat)) {
+          if (value instanceof THREE.Texture && value.image) {
+            images.add(value.image);
+          }
+        }
+      }
+    }
+  });
+  return [...images];
+}
+
+function textureImageReady(img: unknown): boolean {
+  // ImageBitmaps arrive already decoded (GLTFLoader uses an
+  // ImageBitmapLoader where available, e.g. Chrome/Android).
+  if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) {
+    return img.width > 0;
+  }
+  if (
+    typeof HTMLImageElement !== 'undefined' &&
+    img instanceof HTMLImageElement
+  ) {
+    return img.complete && img.naturalWidth > 0;
+  }
+  // Canvas / ImageData / anything else: nothing to wait for.
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // The figure (GLB + in-scene rope), posed once and rendered on demand.
 // ---------------------------------------------------------------------------
 export function HangingFigure({ onReady }: { onReady?: () => void }) {
@@ -159,23 +210,48 @@ export function HangingFigure({ onReady }: { onReady?: () => void }) {
   }, [scene, invalidate]);
 
   useEffect(() => {
-    // Textures decode asynchronously; re-render a handful of times
-    // while they settle, then never again. Also signal readiness once
-    // the first posed frames have been requested.
-    const timers = [120, 400, 1000, 2200].map((ms) =>
-      window.setTimeout(() => invalidate(), ms),
-    );
-    const readyTimer = window.setTimeout(() => {
+    const images = collectTextureImages(scene);
+    // Nudge decoding along for element-backed images (Safari path).
+    for (const img of images) {
+      if (
+        typeof HTMLImageElement !== 'undefined' &&
+        img instanceof HTMLImageElement &&
+        !img.complete &&
+        typeof img.decode === 'function'
+      ) {
+        img.decode().catch(() => {
+          /* decode is best-effort; the poll below is the real gate */
+        });
+      }
+    }
+    const startedAt = performance.now();
+    const fireReady = () => {
       if (!readyFired.current) {
         readyFired.current = true;
         onReady?.();
       }
-    }, 350);
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      window.clearTimeout(readyTimer);
     };
-  }, [invalidate, onReady]);
+    const tick = () => {
+      const pending = images.some((img) => !textureImageReady(img));
+      const elapsed = performance.now() - startedAt;
+      if (!pending) {
+        // One final render with every texture decoded, THEN the
+        // placeholder may hide — a real textured frame now exists.
+        invalidate();
+        fireReady();
+        window.clearInterval(timer);
+        return;
+      }
+      // Still decoding: re-render the (frozen) pose so each texture
+      // appears the moment it lands.
+      invalidate();
+      if (elapsed > 10_000) fireReady();
+      if (elapsed > 20_000) window.clearInterval(timer);
+    };
+    const timer = window.setInterval(tick, 250);
+    tick();
+    return () => window.clearInterval(timer);
+  }, [scene, invalidate, onReady]);
 
   return (
     <group position={[0, -FRAME_CENTER_Y, 0]}>
