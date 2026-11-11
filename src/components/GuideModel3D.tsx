@@ -18,17 +18,24 @@
  *    edge (one rAF writes a rotate() on the sway wrapper); in-scene,
  *    his chest breathes, his head nods and occasionally looks around,
  *    and his legs trail the sway a fraction late (one useFrame).
- *  - ARRIVALS (CHARACTER.arrival): when the active section changes
- *    and settles, he climbs straight up out of the screen along the
- *    rope, waits ~1 s, drops back into the exact same spot with a ≤4px
- *    settle, then the bubble says the greeting and the section's text.
- *    The same drop-in plays once on page load (welcome text instead).
- *    Travel is dressed like rope travel: a ≤3° lean that builds and
- *    melts, a ≤3px hand-over-hand bob on the climb, and a ~4° knee
- *    bend absorbing the landing. Symmetry is guaranteed two ways:
- *    a geometric watchdog re-derives the section from live layout
- *    (direction-agnostic, repeat-friendly), and a speech lock stops
- *    the fast-scroll director from clearing the greeting's queue.
+ *  - SCROLL RIDING (CHARACTER.ride, 2026-11-11): Umar disliked the
+ *    old arrival travel — after scrolling DOWN the model first went
+ *    UP out of view. Now he RIDES WITH THE SCREEN: while the visitor
+ *    scrolls he slides along his rope in the scroll's direction
+ *    (down-scroll = he lowers, up-scroll = he climbs), hard-capped at
+ *    ±56px so he is ALWAYS visible and never leaves his corner; the
+ *    DOM rope inside the moving layer lengthens/shortens above his
+ *    hands to match. When scrolling settles he glides back to his
+ *    anchor (~650 ms), and if the settled section is new, the bubble
+ *    THEN says the greeting and the section's text (CHARACTER.
+ *    arrival). The only remaining big trip is the page-load drop-in:
+ *    he starts up out of sight and lowers himself in once (welcome
+ *    text instead). A ~4° knee bend absorbs the drop-in landing and
+ *    greeting returns. Symmetry is guaranteed two ways: a geometric
+ *    watchdog re-derives the section from live layout (direction-
+ *    agnostic, repeat-friendly), and a speech lock — raised the
+ *    moment a greeting return begins — stops the fast-scroll
+ *    director from clearing the greeting's queue.
  *  - With prefers-reduced-motion ALL motion is off: frozen statue,
  *    bubble swaps greeting → section text in place.
  *
@@ -525,20 +532,27 @@ class GuideErrorBoundary extends Component<
 }
 
 // ---------------------------------------------------------------------------
-// Section arrivals — the choreography state machine. It runs inside
-// the same rAF as the sway (one transform writer for the wrapper), and
-// watches the store's currentSection — the SAME source of truth the
-// speech bubble uses (fed by App's ScrollTriggers).
+// Scroll riding + section greetings — the choreography state machine.
+// It runs inside the same rAF as the sway (one transform writer for
+// the wrapper), and watches the store's currentSection — the SAME
+// source of truth the speech bubble uses (fed by App's ScrollTriggers
+// and corrected by the geometric watchdog below).
 //
 //   risen ──(load delay + model ready)──▶ descending ──▶ idle
-//   idle ──(new section settles 300 ms)──▶ rising ──▶ waiting
-//   waiting ──(waitMs)──▶ descending ──(land)──▶ speak + idle
+//   idle ──(screen scrolling)──▶ riding ──(screen stops)──▶ returning
+//   returning ──(glide home done)──▶ idle
 //
-// While rising/waiting, a newer settled section simply retargets the
-// routine (and restarts the wait), so flying past three sections in a
-// fast scroll produces exactly ONE routine — for the settled section.
+// While riding, his translateY chases a target derived from the live
+// scroll velocity (capped at ±CHARACTER.ride.maxPx): he slides WITH
+// the screen and never disappears. When the screen stops he glides
+// home; if the settled section differs from the last greeted one,
+// the greeting fires as he arrives (the speech lock is raised the
+// moment that return begins, so the fast-scroll director can't eat
+// the queue). A section that settles WITHOUT a ride (a jump scroll)
+// is greeted in place from idle. Flying past three sections in a
+// fast scroll still produces exactly ONE greeting — the settled one.
 // ---------------------------------------------------------------------------
-type ArrivalPhase = 'risen' | 'idle' | 'rising' | 'waiting' | 'descending';
+type ArrivalPhase = 'risen' | 'idle' | 'descending' | 'riding' | 'returning';
 
 interface ArrivalState {
   phase: ArrivalPhase;
@@ -546,17 +560,13 @@ interface ArrivalState {
   since: number;
   /** translateY (px) when the current phase began. */
   from: number;
-  /** Current translateY (px): 0 = home, negative = up the rope. */
+  /** Current translateY (px): 0 = home, + = ridden down, − = up. */
   offset: number;
-  /** Section the routine is currently greeting. */
-  target: SectionConfig['id'];
-  /** Section to speak for when the descent lands (null on load). */
-  speakOnLand: SectionConfig['id'] | null;
   /**
    * Load drop-in only: the section that was current when the descent
    * BEGAN. The landing marks THIS as greeted — never the section at
    * completion time, or a fast first scroll during the drop-in would
-   * be marked "already greeted" and never get its routine.
+   * be marked "already greeted" and never get its greeting.
    */
   loadSpoken: SectionConfig['id'];
   /** Latest section the store reported. */
@@ -567,6 +577,22 @@ interface ArrivalState {
   stillSince: number;
   /** Last section he has spoken for (or landed on, on load). */
   spoken: SectionConfig['id'];
+  /**
+   * Smoothed scroll velocity (px/s, + = scrolling down), derived
+   * from live window.scrollY deltas — the ride target comes from
+   * this, so he answers the SCREEN's movement, whatever drives it
+   * (wheel, touch, Lenis glide, keyboard).
+   */
+  rideVel: number;
+  /** Previous frame's window.scrollY (null until first sampled). */
+  lastScrollY: number | null;
+  /**
+   * A greeting is ARMED for this section: the return glide began on
+   * a new section and the speech lock is already raised for it. It
+   * fires when he is home and the settle gate has passed; it is
+   * disarmed (lock released, nothing spoken) if scrolling resumes.
+   */
+  armed: SectionConfig['id'] | null;
 }
 
 function descendOffset(p: number, from: number, settlePx: number): number {
@@ -640,13 +666,14 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
     since: 0,
     from: 0,
     offset: 0,
-    target: 'hero',
-    speakOnLand: null,
     loadSpoken: 'hero',
     lastSeen: 'hero',
     seenAt: 0,
     stillSince: 0,
     spoken: 'hero',
+    rideVel: 0,
+    lastScrollY: null,
+    armed: null,
   });
   /** Reduced-motion mode: last section greeted by text swap alone. */
   const reducedSpokenRef = useRef<SectionConfig['id'] | null>(null);
@@ -752,6 +779,7 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
     let last = performance.now();
     const A = CHARACTER.arrival;
     const M = CHARACTER.motion;
+    const R = CHARACTER.ride;
     const arr = arrivalRef.current;
 
     const loop = (now: number) => {
@@ -796,10 +824,21 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
         (t - arr.stillSince >= A.debounceMs / 1000 ||
           t - arr.seenAt >= A.debounceMs / 1000 + 1.2);
       const travel = travelRef.current;
+      // Ride velocity, from the screen's ACTUAL movement this frame
+      // (px/s, + = scrolling down), derived from live scrollY deltas.
+      // Smoothed hard (rate 12/s) so a single noisy frame can't yank
+      // him, but fresh enough that he answers the scroll within a
+      // frame or two. "Scrolling" for the ride means the SCREEN is
+      // moving — wheel, touch, Lenis glide and keyboard all count.
+      const yNow = window.scrollY;
+      if (arr.lastScrollY === null) arr.lastScrollY = yNow;
+      const instVel = dt > 0 ? (yNow - arr.lastScrollY) / dt : 0;
+      arr.lastScrollY = yNow;
+      arr.rideVel += (instVel - arr.rideVel) * (1 - Math.exp(-12 * dt));
+      const ridingNow = Math.abs(arr.rideVel) > R.stopPxPerSec;
       // Travel dressing for THIS frame (see the composition below):
-      // a lean while the rope carries him, and the climb bob.
+      // a lean while the rope carries him, sized by the phase below.
       let travelTiltDeg = 0;
-      let travelBobPx = 0;
 
       switch (arr.phase) {
         case 'risen': {
@@ -814,66 +853,14 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
             arr.phase = 'descending';
             arr.since = t;
             arr.from = arr.offset;
-            arr.speakOnLand = null; // load: App's welcome line speaks
             arr.loadSpoken = store.currentSection;
           }
           break;
         }
-        case 'idle': {
-          arr.offset = 0;
-          if (store.welcomed && settled && arr.lastSeen !== arr.spoken) {
-            arr.phase = 'rising';
-            arr.since = t;
-            arr.from = arr.offset;
-            arr.target = arr.lastSeen;
-            // Raise the arrival speech lock for the whole routine:
-            // the fast-scroll director's scared/calm lines must not
-            // clear the greeting sequence out from under him (a
-            // say() wipes the queue). Lowered by the sequence's own
-            // onDone at landing — exact, not a duration estimate.
-            speechTokenRef.current = store.beginArrivalSpeech();
-          }
-          break;
-        }
-        case 'rising': {
-          if (settled && arr.lastSeen !== arr.target) {
-            arr.target = arr.lastSeen;
-          }
-          const p = Math.min((t - arr.since) / (A.riseMs / 1000), 1);
-          const e = p * p; // ease-in: he accelerates away up the rope
-          arr.offset = arr.from + (-travel - arr.from) * e;
-          // Rope-travel dressing: he leans back against the climb
-          // (builds with the journey, gone by the top) and pulls
-          // himself up in tiny hand-over-hand tugs (≤3px, enveloped
-          // in/out so the climb starts and ends smooth).
-          travelTiltDeg = -A.travelTiltDeg * Math.sin(Math.PI * p);
-          travelBobPx =
-            -A.climbBobPx *
-            Math.abs(Math.sin(Math.PI * A.climbBobCycles * p)) *
-            Math.sin(Math.PI * p);
-          if (p >= 1) {
-            arr.phase = 'waiting';
-            arr.since = t;
-          }
-          break;
-        }
-        case 'waiting': {
-          arr.offset = -travel;
-          if (settled && arr.lastSeen !== arr.target) {
-            // A newer section settled while he was up — greet that
-            // one instead, and restart the beat so the pause holds.
-            arr.target = arr.lastSeen;
-            arr.since = t;
-          }
-          if (t - arr.since >= A.waitMs / 1000) {
-            arr.phase = 'descending';
-            arr.since = t;
-            arr.from = arr.offset;
-            arr.speakOnLand = arr.target;
-          }
-          break;
-        }
         case 'descending': {
+          // The page-load drop-in — the ONLY full trip he still
+          // makes. (Section changes no longer send him anywhere:
+          // they are handled by the ride, below.)
           const p = Math.min((t - arr.since) / (A.descendMs / 1000), 1);
           arr.offset = descendOffset(p, arr.from, A.settlePx);
           // Lowering him, the lean swings the other way — the rope
@@ -884,42 +871,148 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
             arr.offset = 0;
             arr.phase = 'idle';
             landingRef.current = t; // knees absorb from this instant
-            if (arr.speakOnLand) {
-              // If yet another section settled during the drop,
-              // greet the one he actually landed on.
-              const id =
-                settled && arr.lastSeen !== arr.speakOnLand
-                  ? arr.lastSeen
-                  : arr.speakOnLand;
+            // Load landing: the welcome sequence owns his voice.
+            // Mark greeted ONLY the section current when the drop
+            // began — if the visitor already scrolled mid-drop-in,
+            // that section is still greeted next (in place, from
+            // idle, once it settles).
+            arr.spoken = arr.loadSpoken;
+          }
+          break;
+        }
+        case 'idle': {
+          arr.offset = 0;
+          if (ridingNow) {
+            // Scrolling resumed under an armed greeting that never
+            // got to speak: disarm it and release its speech lock.
+            if (arr.armed) {
+              store.endArrivalSpeech(speechTokenRef.current);
+              arr.armed = null;
+            }
+            arr.phase = 'riding';
+          } else if (arr.armed) {
+            // The glide home finished before the settle gate had
+            // passed; the greeting stays armed (lock still raised)
+            // and fires the moment the gate passes — or evaporates
+            // if the section turned out to be the greeted one after
+            // all (he wandered back to it during the glide).
+            if (settled && arr.lastSeen !== arr.spoken) {
+              const id = arr.lastSeen;
               const token = speechTokenRef.current;
               speakSection(id, () => store.endArrivalSpeech(token));
               arr.spoken = id;
-            } else {
-              // Load landing: the welcome sequence owns his voice.
-              // Mark greeted ONLY the section current when the drop
-              // began — if the visitor already scrolled mid-drop-in,
-              // that section still gets its own routine next.
-              arr.spoken = arr.loadSpoken;
+              landingRef.current = t; // knees absorb the greeting
+              arr.armed = null;
+            } else if (arr.lastSeen === arr.spoken) {
+              store.endArrivalSpeech(speechTokenRef.current);
+              arr.armed = null;
             }
-            arr.speakOnLand = null;
+          } else if (
+            store.welcomed &&
+            settled &&
+            arr.lastSeen !== arr.spoken
+          ) {
+            // A section settled WITHOUT a ride (a jump scroll, a
+            // nav tap): greet it in place — he is already home.
+            // Raise the speech lock first so the fast-scroll
+            // director cannot clear the greeting's queue mid-play;
+            // the sequence's own onDone lowers it — exact, not a
+            // duration estimate.
+            speechTokenRef.current = store.beginArrivalSpeech();
+            const id = arr.lastSeen;
+            const token = speechTokenRef.current;
+            speakSection(id, () => store.endArrivalSpeech(token));
+            arr.spoken = id;
+          }
+          break;
+        }
+        case 'riding': {
+          // Chase the ride target: scroll speed × gain, hard-capped
+          // in both directions. The chase is an exponential approach,
+          // so he answers the scroll quickly but lands on the target
+          // soft — no jerks at either end. Down-scroll lowers him
+          // (+), up-scroll climbs him (−); the cap means he can
+          // never leave the screen or his corner.
+          const target = Math.max(
+            -R.maxPx,
+            Math.min(R.maxPx, arr.rideVel * R.gain),
+          );
+          arr.offset +=
+            (target - arr.offset) * (1 - Math.exp(-R.followRate * dt));
+          // He leans with the ride, in proportion to how far the
+          // rope has carried him: at the ±cap the lean reaches
+          // travelTiltDeg, at home it is zero (pure idle sway).
+          travelTiltDeg = A.travelTiltDeg * (arr.offset / R.maxPx);
+          if (!ridingNow) {
+            arr.phase = 'returning';
+            arr.since = t;
+            arr.from = arr.offset;
+            // Settle-start: if he stopped on a section he hasn't
+            // greeted, arm the greeting NOW and raise the speech
+            // lock for the whole glide home + speech, so the
+            // fast-scroll director's scared/calm lines cannot clear
+            // the greeting queue out from under him (a say() wipes
+            // the queue). Lowered by the sequence's own onDone.
+            if (store.welcomed && arr.lastSeen !== arr.spoken) {
+              arr.armed = arr.lastSeen;
+              speechTokenRef.current = store.beginArrivalSpeech();
+            }
+          }
+          break;
+        }
+        case 'returning': {
+          if (ridingNow) {
+            // Scrolling resumed mid-glide: ride again. An armed
+            // greeting that never spoke is disarmed, lock released.
+            if (arr.armed) {
+              store.endArrivalSpeech(speechTokenRef.current);
+              arr.armed = null;
+            }
+            arr.phase = 'riding';
+            break;
+          }
+          const p = Math.min((t - arr.since) / (R.returnMs / 1000), 1);
+          const e = 1 - Math.pow(1 - p, 3); // easeOutCubic: swift, then soft
+          arr.offset = arr.from * (1 - e);
+          travelTiltDeg = A.travelTiltDeg * (arr.offset / R.maxPx);
+          if (p >= 1) {
+            arr.offset = 0;
+            arr.phase = 'idle';
+            if (arr.armed && settled && arr.lastSeen !== arr.spoken) {
+              // Home, on a new section: greet it, then explain it.
+              const id = arr.lastSeen;
+              const token = speechTokenRef.current;
+              speakSection(id, () => store.endArrivalSpeech(token));
+              arr.spoken = id;
+              landingRef.current = t; // knees absorb the homecoming
+              arr.armed = null;
+            } else if (arr.armed && arr.lastSeen === arr.spoken) {
+              // He wandered back to the greeted section mid-glide:
+              // nothing to say — release the lock, stay quiet.
+              store.endArrivalSpeech(speechTokenRef.current);
+              arr.armed = null;
+            }
+            // Armed but the settle gate hasn't passed yet: stay
+            // armed into idle (lock still raised) — idle fires the
+            // greeting the moment the gate passes.
           }
           break;
         }
       }
 
-      // Compose sway + arrival into the wrapper's ONE transform.
+      // Compose sway + ride into the wrapper's ONE transform.
       // Pivot (transform-origin: 50% 0 on .guide-sway) is the rope's
       // anchor at the top of the viewport, so the rotate() IS the
-      // pendulum; the translateY() is the arrival climb/drop. The
-      // travel tilt rides INSIDE the same rotate() and the climb bob
-      // inside the same translateY() — still one writer, one clock.
+      // pendulum; the translateY() is the ride offset (and, during
+      // the load drop-in, the descent). The travel tilt rides INSIDE
+      // the same rotate() — still one writer, one clock.
       const sway =
         M.swayDeg * Math.sin((TAU * t) / M.swayPeriodS) +
         M.swayHarmonicDeg *
           Math.sin((TAU * t) / M.swayHarmonicPeriodS + 1.3);
       const el = wrapRef.current;
       if (el) {
-        el.style.transform = `translate3d(0, ${(arr.offset + travelBobPx).toFixed(2)}px, 0) rotate(${(sway + travelTiltDeg).toFixed(4)}deg)`;
+        el.style.transform = `translate3d(0, ${arr.offset.toFixed(2)}px, 0) rotate(${(sway + travelTiltDeg).toFixed(4)}deg)`;
       }
     };
     raf = requestAnimationFrame(loop);
@@ -943,8 +1036,10 @@ export default function GuideModel3D({ onFail }: { onFail: () => void }) {
       <div className="guide-model3d" data-guide-model3d="true">
         {/* the rope: viewport top → the container's top edge, where
             the in-scene rope takes over down to his hands. It lives
-            inside the swaying/climbing layer, so its visible length
-            pays in and out with him as he rises and drops. */}
+            inside the sway/ride layer and is a full viewport tall,
+            so at every ride offset its visible length above his
+            hands grows/shrinks with him while its top end stays
+            far above the screen — the line can never detach. */}
         <div
           className="guide-model-rope"
           style={{ background: ROPE.color, boxShadow: '0 0 6px rgba(0,0,0,0.35)' }}
