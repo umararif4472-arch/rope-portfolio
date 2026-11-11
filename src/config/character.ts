@@ -82,13 +82,14 @@ export const CHARACTER = {
    *               Posed once (arms up, gripping the rope), then given
    *               SUBTLE life only — a tiny pendulum sway, breathing,
    *               head looks, leg lag (see `motion` below) — plus
-   *               SCROLL RIDING: he slides a few px WITH the screen
-   *               while you scroll and glides home when you stop (see
-   *               `ride` below), greeting each new section on his
-   *               return (see `arrival`). He NEVER travels or swings
-   *               free (no physics); with reduced-motion he is a
-   *               frozen statue. If the GLB fails, the medallion
-   *               takes over.
+   *               THE CHOREOGRAPHY (see `arrival` below): while the
+   *               visitor scrolls, he climbs UP his rope and out of
+   *               the top of the screen; when scrolling stops he
+   *               waits ~1 s, then comes DOWN the rope like real
+   *               world and greets the new section. He NEVER travels
+   *               sideways or swings free (no physics); with
+   *               reduced-motion he is a frozen statue. If the GLB
+   *               fails, the medallion takes over.
    *  - 'fixed'  → fix pass 5: the image medallion, stuck the same way.
    */
   guideMode: 'model3d',
@@ -157,100 +158,124 @@ export const CHARACTER = {
     legLagS: 0.4,
   },
   // -------------------------------------------------------------------------
-  //  SECTION GREETINGS (2026-11-10, reworked 2026-11-11) — when the
-  //  visitor SETTLES on a new section, he greets it ("Oh, so you're
-  //  here!") and then explains it. He used to climb up out of the
-  //  screen and drop back for this; Umar didn't like the vanishing
-  //  act, so the travel is now SCROLL RIDING (see `ride` below) and
-  //  this block keeps only the speech + the one remaining trip: the
-  //  page-load drop-in, where he starts up out of sight and lowers
-  //  himself into his spot once (welcome line instead of greeting).
+  //  THE CHOREOGRAPHY (Umar's design — final form, 2026-11-11).
+  //
+  //  "First when visitors scroll down, my model remain on top, then
+  //  after [a] second it come down and say oh so you are here and
+  //  tell everything about that screen" — and the same when
+  //  scrolling UP: "my model go up WITH SCREEN WHILE SCROLLING, and
+  //  then come down like real world".
+  //
+  //  So, as a loop:
+  //   1. WHILE the visitor is scrolling (either direction), he
+  //      CLIMBS UP his rope — coupled to the scroll itself, starting
+  //      as the scrolling starts — until he is out of view above
+  //      the top of the screen ("remains on top"). The rope above
+  //      his hands shortens as he climbs toward the anchor.
+  //   2. WHEN SCROLLING STOPS he stays up for waitAfterScrollMs.
+  //   3. THEN HE COMES DOWN "like real world": a physical descent
+  //      down the rope (descentMs) back to his exact anchored spot —
+  //      gentle start, steady lowering, soft deceleration into the
+  //      landing, knee-bend absorb included (below). The rope pays
+  //      out above his hands as he lowers.
+  //   4. ON LANDING, if the section he settled on is NEW (different
+  //      from the last one he greeted), the bubble says the greeting
+  //      ("Oh, so you're here!") and then that section's explainer
+  //      text. Same section → he lands quietly, no speech.
+  //   5. Scroll again DURING the wait or the descent and he goes
+  //      straight back UP; a greeting that hadn't started yet is
+  //      simply cancelled. (If scrolling resumes while he is
+  //      SPEAKING, he finishes his sentence first — then departs.)
+  //   6. Page load is its own one-off: he starts up, lowers himself
+  //      in once (the same descent), and the welcome line plays.
   // -------------------------------------------------------------------------
   arrival: {
     /**
-     * On page load ONLY: how long his one drop-in takes (ms) — he
-     * lowers himself from above the screen into his anchored spot.
+     * How long (ms) he stays up top AFTER scrolling stops, before
+     * he starts coming down. The heart of the routine: scroll,
+     * pause… and then he lowers himself back to you.
      */
-    descendMs: 700,
+    waitAfterScrollMs: 1000,
+    /**
+     * How long (ms) the descent down the rope takes — the choreo
+     * descent after every scroll, and the one-time page-load
+     * drop-in. Long enough to read as a man lowering himself hand
+     * over hand, not an elevator.
+     */
+    descentMs: 900,
     /** How long the greeting bubble shows before the section text (ms). */
     greetingMs: 1600,
-    /** The greeting he says when he settles on a new section. */
+    /** The greeting he says when he lands on a new section. */
     greetingText: "Oh, so you're here!",
     /**
-     * The tiny "settle" when the load drop-in lands: he drops this
-     * many px PAST his spot, then eases back up into place. 4px
-     * max — a soft landing, never a bounce.
+     * The tiny "settle" at the end of a descent: he drops this many
+     * px PAST his spot, then eases back up into place. 4px max — a
+     * soft landing, never a bounce.
      */
     settlePx: 4,
     /**
-     * TRAVEL TILT — while the rope carries him (the load drop-in,
-     * and the scroll ride below), he leans a few degrees like a real
-     * body hanging from a moving rope: the lean follows how far the
-     * rope has carried him and melts back into the idle sway when he
-     * is home. Degrees, hard cap 3 — a lean, not a swing.
+     * TRAVEL TILT — while the rope carries him (climbing up, or
+     * lowering down), he leans a few degrees like a real body
+     * hanging from a moving rope: leaning INTO the climb as he
+     * rises, trailing the descent as he lowers, melting back into
+     * the idle sway when he is home. Degrees, hard cap 3 — a lean,
+     * not a swing.
      */
     travelTiltDeg: 2.6,
     /**
-     * LANDING ABSORB — when he touches down (load drop-in, and when
-     * a ride home ends in a greeting), his knees soften by this many
-     * degrees and straighten again over kneeBendMs, like real legs
-     * taking his weight. ~4° is a dip, not a squat.
+     * LANDING ABSORB — when he touches down (load drop-in and every
+     * choreo descent), his knees soften by this many degrees and
+     * straighten again over kneeBendMs, like real legs taking his
+     * weight. ~4° is a dip, not a squat.
      */
     kneeBendDeg: 4,
     kneeBendMs: 320,
     /**
      * A section must be on screen this long (ms) before it counts
      * as settled — this is what makes fast fly-by scrolling skip
-     * greeting the in-between sections.
+     * greeting the in-between sections (and what times the
+     * in-place greeting when a jump scroll never made him climb).
      */
     debounceMs: 300,
     /** On page load: he waits this long (ms) up top, then drops in. */
     loadDelayMs: 500,
-  },
-  // -------------------------------------------------------------------------
-  //  SCROLL RIDING (2026-11-11) — Umar: "i want that my [model] go
-  //  up with scroll that my screen". So while the visitor scrolls, he
-  //  RIDES WITH THE SCREEN on his rope: scroll down and he slides
-  //  DOWN a little (the rope above his hands grows longer), scroll
-  //  up and he climbs back UP (rope shortens). He is ALWAYS visible,
-  //  always in his top-right neighbourhood, and never moves sideways
-  //  — the slide is hard-capped below. When scrolling settles he
-  //  glides back to his exact anchor, and if the settled section is
-  //  a new one, THAT is when the greeting fires (see `arrival`).
-  // -------------------------------------------------------------------------
-  ride: {
     /**
-     * The FURTHEST he may slide from his anchor, in px, in either
-     * direction. 56px is a clear ride you can see — and small enough
-     * that he never leaves the screen or his corner.
+     * THE CLIMB — while scrolling, his height is a spring pulled to
+     * "fully out of the top of the screen". This is the spring's
+     * stiffness; damping is set critically in code (2×√stiffness),
+     * so the climb starts SMOOTH (no snap), is most of the way up
+     * within ~300 ms of the scroll starting, and is fully up inside
+     * ~0.5 s of sustained scrolling, with no overshoot past the
+     * exit. RAISE = he shoots up faster; LOWER = a lazier climb.
      */
-    maxPx: 56,
+    riseSpring: 110,
     /**
-     * How scroll speed turns into slide distance: px of slide per
-     * px/second of scroll speed. A brisk 1,100 px/s scroll already
-     * pins him at the cap; a gentle reading scroll (~200 px/s) gives
-     * a soft ~10px drift.
-     */
-    gain: 0.05,
-    /**
-     * How eagerly his slide chases its target (per second). Higher =
-     * he answers the scroll sooner; lower = lazier, floatier. The
-     * chase is exponential, so it starts fast and lands soft — no
-     * jerks at either end.
-     */
-    followRate: 5.5,
-    /**
-     * Scrolling slower than this (px per second) counts as STOPPED:
-     * the moment the screen's movement dies below this, he starts
-     * gliding home.
+     * Scroll speed (px per second of actual screen movement) that
+     * counts as "scrolling" for the climb. Slower than this and the
+     * screen counts as stopped (reading micro-drift doesn't send
+     * him up the rope).
      */
     stopPxPerSec: 50,
     /**
-     * How long the glide back to his anchor takes once scrolling
-     * settles (ms). Long enough to read as a gentle lowering/raising
-     * home — not a snap.
+     * Scrolling must persist this long (ms) before a departure
+     * triggers — a one-frame wheel nudge shouldn't banish him.
      */
-    returnMs: 650,
+    scrollHotMs: 60,
+    /**
+     * The screen must be truly still (scrollY not changing) this
+     * long (ms) before it counts as STOPPED and the
+     * waitAfterScrollMs countdown starts — smooth scrolling's tail
+     * shouldn't fake a stop.
+     */
+    scrollColdMs: 120,
+    /**
+     * CLIMB BOB — while he is hauling himself up, his height bobs
+     * by this many px, climbBobCycles times over one full climb:
+     * the hand-over-hand tug of a man climbing, without his hands
+     * ever leaving the rope (the arm bones are never animated).
+     */
+    climbBobPx: 2.5,
+    climbBobCycles: 2,
   },
   // -------------------------------------------------------------------------
   //  FIXED POSITION (fix pass 5) — where the stuck model sits, forever
